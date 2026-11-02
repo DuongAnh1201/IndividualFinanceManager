@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { check, integer, primaryKey, real, sqliteTable, text, unique } from "drizzle-orm/sqlite-core";
+import { check, index, integer, primaryKey, real, sqliteTable, text, unique } from "drizzle-orm/sqlite-core";
 
 const id = () => text("id").primaryKey();
 const currency = () => text("currency", { enum: ["USD", "VND"] }).notNull();
@@ -13,12 +13,15 @@ export const settings = sqliteTable(
   "settings",
   {
     id: integer("id").primaryKey().default(1),
-    base_currency: text("base_currency").notNull().default("USD"),
+    base_currency: text("base_currency", { enum: ["USD", "VND"] })
+      .notNull()
+      .default("USD"),
     pay_days: text("pay_days", { mode: "json" }).$type<number[]>().notNull().default([10, 25]),
     week_starts_on: integer("week_starts_on").notNull().default(1),
     timezone: text("timezone").notNull(),
   },
   (t) => [
+    check("settings_currency", sql`${t.base_currency} IN ('USD','VND')`),
     check("settings_singleton", sql`${t.id} = 1`),
     check("settings_week_start", sql`${t.week_starts_on} BETWEEN 0 AND 6`),
   ],
@@ -77,6 +80,7 @@ export const subscription = sqliteTable(
     ...timestamps(),
   },
   (t) => [
+    check("subscription_currency", sql`${t.currency} IN ('USD','VND')`),
     check("subscription_amount", sql`typeof(${t.amount_minor}) = 'integer' AND ${t.amount_minor} > 0`),
     check("subscription_billing_day", sql`${t.billing_day} BETWEEN 1 AND 31`),
   ],
@@ -103,6 +107,9 @@ export const expense = sqliteTable(
     ...timestamps(),
   },
   (t) => [
+    check("expense_currency", sql`${t.currency} IN ('USD','VND')`),
+    index("expense_date_idx").on(t.date),
+    index("expense_category_idx").on(t.category_id),
     unique("expense_subscription_month").on(t.subscription_id, t.billing_month),
     check("expense_amount", sql`typeof(${t.amount_minor}) = 'integer' AND ${t.amount_minor} > 0`),
     check("expense_source", sql`${t.source} IN ('manual','subscription')`),
@@ -148,7 +155,11 @@ export const income = sqliteTable(
       .notNull()
       .references(() => bottleRuleVersion.id),
   },
-  (t) => [check("income_amount", sql`typeof(${t.amount_minor}) = 'integer' AND ${t.amount_minor} > 0`)],
+  (t) => [
+    index("income_date_idx").on(t.date),
+    check("income_currency", sql`${t.currency} IN ('USD','VND')`),
+    check("income_amount", sql`typeof(${t.amount_minor}) = 'integer' AND ${t.amount_minor} > 0`),
+  ],
 );
 export const bottleAllocation = sqliteTable(
   "bottle_allocation",
@@ -183,6 +194,7 @@ export const bottleTransfer = sqliteTable(
     note: text("note"),
   },
   (t) => [
+    check("transfer_currency", sql`${t.currency} IN ('USD','VND')`),
     check("transfer_amount", sql`typeof(${t.amount_minor}) = 'integer' AND ${t.amount_minor} > 0`),
     check("transfer_distinct_bottles", sql`${t.from_bottle_id} <> ${t.to_bottle_id}`),
   ],
@@ -197,7 +209,11 @@ export const livingLimit = sqliteTable(
 export const exchangeRate = sqliteTable(
   "exchange_rate",
   { month: text("month").notNull(), currency: currency(), rate_to_base: real("rate_to_base").notNull() },
-  (t) => [primaryKey({ columns: [t.month, t.currency] }), check("rate_positive", sql`${t.rate_to_base} > 0`)],
+  (t) => [
+    check("rate_currency", sql`${t.currency} IN ('USD','VND')`),
+    primaryKey({ columns: [t.month, t.currency] }),
+    check("rate_positive", sql`${t.rate_to_base} > 0`),
+  ],
 );
 export const monthlyReport = sqliteTable("monthly_report", {
   month: text("month").primaryKey(),
