@@ -1,7 +1,4 @@
-import type { Granularity, IsoDate, IsoMonth, Period } from "./stub-types";
-
-/** 0 = Sunday … 6 = Saturday; 1 (Monday) is the default week start. */
-export type WeekStart = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+import type { Granularity, IsoDate, IsoMonth, Period, WeekStart } from "./types";
 
 const DATE_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
 
