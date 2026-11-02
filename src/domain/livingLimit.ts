@@ -1,5 +1,4 @@
-import { monthRate } from "./expense";
-import { convertToBase } from "./money";
+import { toBaseMinor } from "./currency";
 import { monthOf } from "./period";
 import type {
   BottleAllocation,
@@ -41,9 +40,8 @@ export function livingSpent(
   const missingRateExpenseIds: Id[] = [];
   for (const e of expenses) {
     if (monthOf(e.date) !== month || !counting.has(e.categoryId)) continue;
-    const rate = e.fxRateToBase ?? monthRate(rates, month, e.currency);
-    const r = convertToBase({ amountMinor: e.amountMinor, currency: e.currency }, baseCurrency, rate);
-    if (r.ok) spentMinor += r.money.amountMinor;
+    const base = toBaseMinor(e, baseCurrency, rates);
+    if (base !== null) spentMinor += base;
     else missingRateExpenseIds.push(e.id);
   }
   return { spentMinor, missingRateExpenseIds };
@@ -127,9 +125,8 @@ export function suggestedLimit(
   for (const a of allocations) {
     const income = incomeById.get(a.incomeId);
     if (!income || a.bottleId !== necessitiesBottleId) continue;
-    const rate = income.fxRateToBase ?? monthRate(rates, month, income.currency);
-    const r = convertToBase({ amountMinor: a.amountMinor, currency: income.currency }, baseCurrency, rate);
-    if (r.ok) limitMinor += r.money.amountMinor;
+    const base = toBaseMinor({ ...income, amountMinor: a.amountMinor }, baseCurrency, rates);
+    if (base !== null) limitMinor += base;
     else missing.add(income.id);
   }
   return { limitMinor, missingRateIncomeIds: [...missing] };
