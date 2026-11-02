@@ -1,4 +1,4 @@
-import type { CurrencyCode, Money } from "./stub-types";
+import type { CurrencyCode, Money } from "./types";
 
 /** Minor-unit exponent per currency (ISO 4217, D-013). Extend when adding currencies. */
 export const CURRENCY_EXPONENT: Record<CurrencyCode, number> = { USD: 2, VND: 0 };
