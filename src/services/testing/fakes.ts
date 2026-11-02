@@ -90,14 +90,24 @@ export function fakeRepos(store: Store): Repositories {
   const s = store;
   let depth = 0;
   return {
-    settings: { get: () => s.settings },
-    paymentMethods: { list: () => [...s.paymentMethods] },
+    settings: { get: () => s.settings, update: (v) => void (s.settings = v) },
+    paymentMethods: {
+      list: () => [...s.paymentMethods],
+      create: (m) => void s.paymentMethods.push(m),
+      update: (m) =>
+        void (s.paymentMethods[must(s.paymentMethods, (x) => x.id === m.id, "payment method")] = m),
+    },
     categories: {
       list: () => [...s.categories],
+      create(c) {
+        if (s.categories.some((x) => x.name === c.name)) throw new Error("duplicate category name");
+        s.categories.push(c);
+      },
       update: (c) => void (s.categories[must(s.categories, (x) => x.id === c.id, "category")] = c),
     },
     bottles: {
       list: () => [...s.bottles],
+      create: (b) => void s.bottles.push(b),
       update: (b) => void (s.bottles[must(s.bottles, (x) => x.id === b.id, "bottle")] = b),
     },
     ruleVersions: { list: () => [...s.ruleVersions], insert: (v) => void s.ruleVersions.push(v) },
@@ -171,7 +181,10 @@ export function fakeRepos(store: Store): Repositories {
       get: (month) => s.livingLimits.find((l) => l.month === month),
       upsert: (l) => upsertBy(s.livingLimits, l, (x) => x.month === l.month),
     },
-    exchangeRates: { list: () => [...s.exchangeRates] },
+    exchangeRates: {
+      list: () => [...s.exchangeRates],
+      upsert: (r) => upsertBy(s.exchangeRates, r, (x) => x.month === r.month && x.currency === r.currency),
+    },
     reminders: {
       list: () => [...s.reminders],
       upsert: (r) => upsertBy(s.reminders, r, (x) => x.slot === r.slot),

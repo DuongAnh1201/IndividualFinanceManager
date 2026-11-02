@@ -1,6 +1,6 @@
 import { bottleBalances } from "../domain/bottleBalances";
 import { livingLimitStatusFor, livingSpent } from "../domain/livingLimit";
-import { addDays, monthOf, parseDate, periodOf } from "../domain/period";
+import { addDays, monthOf, periodOf } from "../domain/period";
 import { pendingReminders } from "../domain/reminders";
 import {
   buildComparisonSeries,
@@ -21,6 +21,7 @@ import type {
   Subscription,
 } from "../domain/types";
 import type { ServiceDeps } from "./ports";
+import { getReminderStart } from "./reminders";
 
 /**
  * Load everything the report builders need. Bottle balances are derived from rows dated
@@ -129,13 +130,6 @@ export interface Dashboard {
   upcomingSubscriptions: UpcomingSubscription[];
 }
 
-/** First day of the month before `today`'s month: how far back missed pay days show. */
-function reminderLookbackStart(today: IsoDate): IsoDate {
-  const { year, month } = parseDate(today);
-  const prev = month === 1 ? { year: year - 1, month: 12 } : { year, month: month - 1 };
-  return `${String(prev.year).padStart(4, "0")}-${String(prev.month).padStart(2, "0")}-01`;
-}
-
 export function getDashboard(deps: ServiceDeps, today?: IsoDate, upcomingDays = 14): Dashboard {
   const { repos, clock } = deps;
   const t = today ?? clock.today();
@@ -156,7 +150,7 @@ export function getDashboard(deps: ServiceDeps, today?: IsoDate, upcomingDays = 
     pendingReminders: pendingReminders({
       payDays: repos.settings.get().payDays,
       today: t,
-      since: reminderLookbackStart(t),
+      since: getReminderStart(deps, t),
       incomes: data.incomes,
       stored: repos.reminders.list(),
     }),
