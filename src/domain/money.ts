@@ -85,3 +85,50 @@ export function formatMoney(m: Money, locale = "en-US"): string {
     maximumFractionDigits: exp,
   }).format(m.amountMinor / 10 ** exp);
 }
+
+export type ParseMoneyError = "empty" | "invalid" | "too-many-decimals" | "too-large";
+
+export type ParseMoneyResult = { ok: true; amountMinor: number } | { ok: false; reason: ParseMoneyError };
+
+/**
+ * Parse user-typed text into integer minor units, with no floating point.
+ * - `,` is a thousands separator (en-US style), `.` is the decimal point; spaces and a currency
+ *   symbol/code ($, ₫, USD, VND) are ignored.
+ * - USD (exponent 2): up to 2 decimals; more is an error (never silently rounded).
+ * - VND (exponent 0): no decimals; a `.` followed by exactly 3 digits groups (e.g. "50.000") is
+ *   read as a thousands separator, any other `.` is an error.
+ * - No sign: negative/zero amounts are rejected by BR-2 (`validateExpense`), not here (a
+ *   minus sign is "invalid"; "0" parses to 0).
+ */
+export function parseMoneyInput(text: string, currency: CurrencyCode): ParseMoneyResult {
+  const exp = currencyExponent(currency);
+  const cleaned = text
+    .replace(/\s+/g, "")
+    .replace(/^(?:USD|VND|\$|₫)/i, "")
+    .replace(/(?:USD|VND|\$|₫)$/i, "");
+  if (cleaned === "") return { ok: false, reason: "empty" };
+
+  let whole: string;
+  let frac = "";
+  if (exp === 0 && /^\d{1,3}(?:\.\d{3})+$/.test(cleaned)) {
+    whole = cleaned.replaceAll(".", "");
+  } else {
+    const parts = cleaned.split(".");
+    if (parts.length > 2) return { ok: false, reason: "invalid" };
+    whole = parts[0] ?? "";
+    frac = parts[1] ?? "";
+    if (whole.includes(",") && !/^\d{1,3}(?:,\d{3})+$/.test(whole)) return { ok: false, reason: "invalid" };
+    whole = whole.replaceAll(",", "");
+    if (!/^\d*$/.test(whole) || !/^\d*$/.test(frac) || (whole === "" && frac === "")) {
+      return { ok: false, reason: "invalid" };
+    }
+    if (frac.length > exp) {
+      return { ok: false, reason: "too-many-decimals" };
+    }
+  }
+
+  const digits = (whole === "" ? "0" : whole) + frac.padEnd(exp, "0");
+  const amountMinor = Number(digits);
+  if (!Number.isSafeInteger(amountMinor)) return { ok: false, reason: "too-large" };
+  return { ok: true, amountMinor };
+}
