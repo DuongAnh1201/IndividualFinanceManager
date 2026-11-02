@@ -5,6 +5,7 @@ import {
   currencyExponent,
   formatMoney,
   money,
+  parseMoneyInput,
   roundHalfEven,
   subtractMoney,
   sumMoney,
@@ -95,5 +96,63 @@ describe("formatMoney", () => {
   });
   it("VND has no decimals", () => {
     expect(formatMoney(money(50000, "VND"))).toBe("₫50,000");
+  });
+});
+
+describe("parseMoneyInput", () => {
+  const ok = (text: string, cur: "USD" | "VND", amountMinor: number) =>
+    expect(parseMoneyInput(text, cur)).toEqual({ ok: true, amountMinor });
+  const bad = (text: string, cur: "USD" | "VND", reason: string) =>
+    expect(parseMoneyInput(text, cur)).toEqual({ ok: false, error: reason });
+
+  it("USD whole, decimals and grouping", () => {
+    ok("12", "USD", 1200);
+    ok("12.5", "USD", 1250);
+    ok("12.50", "USD", 1250);
+    ok("0.07", "USD", 7);
+    ok(".5", "USD", 50);
+    ok("5.", "USD", 500);
+    ok("1,234.50", "USD", 123450);
+    ok(" $ 1,000 ", "USD", 100000);
+    ok("USD 3.10", "USD", 310);
+    ok("0", "USD", 0);
+  });
+  it("is exact where floats are not", () => {
+    ok("0.1", "USD", 10);
+    ok("1.15", "USD", 115);
+    ok("19.99", "USD", 1999);
+    ok("1.00", "USD", 100);
+  });
+  it("USD rejects more than 2 decimals instead of rounding", () => {
+    bad("1.005", "USD", "too-many-decimals");
+    bad("1.230", "USD", "too-many-decimals");
+  });
+  it("VND whole amounts and dot/comma thousands", () => {
+    ok("50000", "VND", 50000);
+    ok("50,000", "VND", 50000);
+    ok("50.000", "VND", 50000);
+    ok("1.250.000", "VND", 1250000);
+    ok("₫50,000", "VND", 50000);
+    ok("50000 VND", "VND", 50000);
+  });
+  it("VND rejects fractions", () => {
+    bad("12.5", "VND", "too-many-decimals");
+    bad("12.50", "VND", "too-many-decimals");
+  });
+  it("rejects malformed input", () => {
+    bad("", "USD", "empty");
+    bad("   ", "USD", "empty");
+    bad("$", "USD", "empty");
+    bad("abc", "USD", "invalid");
+    bad("-5", "USD", "invalid");
+    bad("1.2.3", "USD", "invalid");
+    bad("12,34", "USD", "invalid");
+    bad("1,23,456", "USD", "invalid");
+    bad(".", "USD", "invalid");
+    bad("1e5", "USD", "invalid");
+  });
+  it("rejects unsafe magnitudes", () => {
+    bad("99999999999999999999", "VND", "too-large");
+    bad("999999999999999.99", "USD", "too-large");
   });
 });
