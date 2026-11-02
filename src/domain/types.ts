@@ -26,12 +26,15 @@ export interface Money {
 
 // ---------- settings & lookups ----------
 
+/** 0 = Sunday … 6 = Saturday. */
+export type WeekStart = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+
 export interface Settings {
   baseCurrency: CurrencyCode;
   /** Days of month, default [10, 25]. */
   payDays: number[];
   /** 0 = Sunday … 6 = Saturday; 1 = Monday (default). */
-  weekStartsOn: number;
+  weekStartsOn: WeekStart;
   /** IANA zone, e.g. "America/Los_Angeles". */
   timezone: string;
 }
@@ -71,7 +74,10 @@ export interface Expense {
   /** > 0, minor units of `currency`. */
   amountMinor: number;
   currency: CurrencyCode;
-  /** Snapshot rate used for reports; null = base currency. */
+  /**
+   * Rate snapshot used for reports. null = no per-transaction rate: base-currency
+   * amounts need none; otherwise fall back to the month's exchange rate (BR-8).
+   */
   fxRateToBase: number | null;
   categoryId: Id;
   paymentMethodId: Id;
@@ -109,6 +115,7 @@ export interface Income {
   date: IsoDate;
   amountMinor: number;
   currency: CurrencyCode;
+  /** Same semantics as Expense.fxRateToBase. */
   fxRateToBase: number | null;
   /** Free text, e.g. "Salary". */
   source: string;
@@ -158,6 +165,12 @@ export interface BottleTransfer {
   note: string | null;
 }
 
+/** Total allocated to a bottle in a period (base currency minor units). */
+export interface BottleTotal {
+  bottleId: Id;
+  totalMinor: number;
+}
+
 export interface BottleBalance {
   bottleId: Id;
   /** Base currency minor units. */
@@ -178,7 +191,7 @@ export interface LivingLimitStatus {
   month: IsoMonth;
   limitMinor: number;
   spentMinor: number;
-  /** spent / limit (0.8 = 80 %). */
+  /** spent / limit (0.8 = 80 %). If limitMinor is 0: 0 when nothing spent, else Infinity (status "over"). */
   ratio: number;
   status: LivingLimitStatusKind;
 }
@@ -243,10 +256,10 @@ export interface MonthlyReport {
   byPaymentMethod: PaymentMethodTotal[];
   /** By payment-method type: credit vs debit vs cash. */
   byPaymentType: Record<PaymentMethodType, number>;
-  subscriptionsMinor: number;
-  dailyMinor: number;
+  /** Total per category kind (subscription / daily / other); sums to totalSpendMinor. */
+  byKind: Record<CategoryKind, number>;
   incomeTotalMinor: number;
-  bottleAllocations: BottleBalance[];
+  bottleAllocations: BottleTotal[];
   bottleBalances: BottleBalance[];
   livingLimit: LivingLimitStatus | null;
   /** Up to 5. */
@@ -264,6 +277,8 @@ export interface ComparisonPoint {
   spendMinor: number;
   livingLimitMinor: number | null;
   livingSpentMinor: number;
+  /** Expenses without an FX rate (BR-8), excluded from totals. */
+  missingRateCount: number;
 }
 
 export interface ComparisonSeries {
