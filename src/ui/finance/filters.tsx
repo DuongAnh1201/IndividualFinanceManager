@@ -74,8 +74,8 @@ export function TransactionFilterForm({
           </label>
         </div>
         <p className="muted">
-          Category and payment method filters apply to expenses. A bottle filter also matches income allocated
-          to that bottle.
+          Category and payment method filters show matching expenses only. A bottle filter also matches income
+          allocated to that bottle.
         </p>
         <div className="form-actions">
           <button className="button" type="submit">

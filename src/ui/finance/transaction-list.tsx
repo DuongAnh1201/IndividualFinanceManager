@@ -64,17 +64,23 @@ export function TransactionList({
                   {title} on {value.date}
                 </span>
               </Link>
-              <ConfirmAction
-                action={deleteAction}
-                id={value.id}
-                kind={kind}
-                label="Delete"
-                explanation={
-                  kind === "income"
-                    ? "Delete this income and its bottle allocations?"
-                    : "Delete this expense? This cannot be undone."
-                }
-              />
+              {kind === "expense" && "source" in value && value.source === "subscription" ? (
+                <Link className="text-link" href="/subscriptions">
+                  Manage subscription
+                </Link>
+              ) : (
+                <ConfirmAction
+                  action={deleteAction}
+                  id={value.id}
+                  kind={kind}
+                  label="Delete"
+                  explanation={
+                    kind === "income"
+                      ? "Delete this income and its bottle allocations?"
+                      : "Delete this expense? This cannot be undone."
+                  }
+                />
+              )}
             </div>
           </li>
         );

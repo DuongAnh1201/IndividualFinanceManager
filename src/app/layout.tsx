@@ -4,6 +4,8 @@ import localFont from "next/font/local";
 import Link from "next/link";
 import { Penny } from "@/ui/mascots";
 import { Navigation } from "@/ui/navigation";
+import { SubscriptionSync } from "@/ui/finance/subscription-sync";
+import { syncDueSubscriptions } from "./actions";
 import "./globals.css";
 
 const nunito = localFont({
@@ -49,6 +51,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
               </Link>
             </header>
             <main id="main-content" tabIndex={-1}>
+              <SubscriptionSync sync={syncDueSubscriptions} />
               {children}
             </main>
             <footer>
