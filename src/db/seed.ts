@@ -1,8 +1,10 @@
+import { sql } from "drizzle-orm";
 import { pathToFileURL } from "node:url";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import { openDatabase } from "./client";
 import { migrationsDirectory } from "./config";
 import * as s from "./schema";
+import { initializeFirstUse } from "./first-use";
 
 // Stable UUIDs make repeated seeds safe without overwriting user edits.
 const uuid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
@@ -29,9 +31,19 @@ const categories = [
   ["Other", "other", true, 0],
 ] as const;
 
-export function seedDatabase(db: ReturnType<typeof openDatabase>["db"], timezone = "America/Los_Angeles") {
+export function seedDatabase(
+  db: ReturnType<typeof openDatabase>["db"],
+  timezone = "America/Los_Angeles",
+  now = new Date(),
+) {
   db.transaction((tx) => {
-    tx.insert(s.settings).values({ id: 1, timezone }).onConflictDoNothing().run();
+    // Raw insert lists only the columns every schema version has, so seeding also works on a
+    // database that has not yet received later migrations (upgrade tests).
+    tx.run(sql`INSERT OR IGNORE INTO settings (id, timezone) VALUES (1, ${timezone})`);
+    const hasFirstUse = tx
+      .all<{ name: string }>(sql`PRAGMA table_info(settings)`)
+      .some((c) => c.name === "first_used_on");
+    if (hasFirstUse) initializeFirstUse(tx, now);
     bottles.forEach(([name, mascot], i) => {
       tx.insert(s.bottle)
         .values({ id: uuid(i + 1), name, mascot, sort_order: i })

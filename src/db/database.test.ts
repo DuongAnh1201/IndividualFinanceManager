@@ -23,12 +23,19 @@ afterEach(() => {
 describe("database migration and seed", () => {
   it("migrates twice and seeds repeatably without resetting settings", () => {
     const { db, sqlite } = setup();
-    seedDatabase(db);
+    seedDatabase(db, undefined, new Date("2026-11-12T20:00:00Z"));
     db.update(s.settings).set({ timezone: "Asia/Ho_Chi_Minh" }).run();
     migrate(db, { migrationsFolder: fileURLToPath(new URL("./migrations", import.meta.url)) });
-    seedDatabase(db);
+    seedDatabase(db, undefined, new Date("2027-05-01T00:00:00Z")); // later seed must not move first use
     expect(db.select().from(s.settings).all()).toEqual([
-      { id: 1, base_currency: "USD", pay_days: [10, 25], week_starts_on: 1, timezone: "Asia/Ho_Chi_Minh" },
+      {
+        id: 1,
+        base_currency: "USD",
+        pay_days: [10, 25],
+        week_starts_on: 1,
+        timezone: "Asia/Ho_Chi_Minh",
+        first_used_on: "2026-11-12", // 20:00Z is still Nov 12 in Los Angeles (seed zone)
+      },
     ]);
     expect(db.select().from(s.bottle).all()).toHaveLength(6);
     expect(db.select().from(s.category).all()).toHaveLength(11);
@@ -122,5 +129,26 @@ describe("database migration and seed", () => {
     seedDatabase(setup(path).db);
     const { db } = setup(path);
     expect(db.select().from(s.category).all()).toHaveLength(11);
+  });
+  it("first use is the local date in the saved timezone, set once", () => {
+    const { db } = setup();
+    // 2026-11-12T03:00Z is Nov 11 in Los Angeles but Nov 12 in Ho Chi Minh.
+    seedDatabase(db, "Asia/Ho_Chi_Minh", new Date("2026-11-12T03:00:00Z"));
+    expect(db.select().from(s.settings).get()?.first_used_on).toBe("2026-11-12");
+    seedDatabase(db, "America/Los_Angeles", new Date("2030-01-01T00:00:00Z"));
+    expect(db.select().from(s.settings).get()?.first_used_on).toBe("2026-11-12");
+  });
+
+  it("existing installs without a first-use date backfill to their earliest recorded activity", () => {
+    const { db, sqlite } = setup();
+    seedDatabase(db, "UTC", new Date("2026-11-12T00:00:00Z"));
+    sqlite.prepare("UPDATE settings SET first_used_on = NULL").run();
+    sqlite
+      .prepare(
+        "INSERT INTO reminder (slot, status, resolved_at) VALUES ('2026-08-10', 'dismissed', '2026-08-11T00:00:00.000Z')",
+      )
+      .run();
+    seedDatabase(db, "UTC", new Date("2026-11-12T00:00:00Z"));
+    expect(db.select().from(s.settings).get()?.first_used_on).toBe("2026-08-10");
   });
 });

@@ -242,6 +242,7 @@ describe("repositories", () => {
   it("upserts settings, rates and living limits without duplicate keys", () => {
     const { r } = setup();
     const settings = {
+      firstUsedOn: r.settings.get().firstUsedOn,
       baseCurrency: "VND" as const,
       payDays: [5, 20],
       weekStartsOn: 0 as const,

@@ -30,6 +30,8 @@ export interface Money {
 export type WeekStart = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
 export interface Settings {
+  /** First local date of app use; set once during initialization and preserved thereafter. */
+  firstUsedOn: IsoDate;
   baseCurrency: CurrencyCode;
   /** Days of month, default [10, 25]. */
   payDays: number[];

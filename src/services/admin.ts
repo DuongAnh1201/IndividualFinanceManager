@@ -68,13 +68,14 @@ export function updateSettings(deps: ServiceDeps, input: SettingsInput): Result<
       errors.push(err("invalid-timezone", "timezone", "Unknown time zone."));
     if (errors.length > 0 || !isCurrencyCode(input.baseCurrency)) return fail(errors);
 
+    const before = repos.settings.get();
     const settings: Settings = {
+      firstUsedOn: before.firstUsedOn, // immutable marker: never taken from input
       baseCurrency: input.baseCurrency,
       payDays: [...new Set(input.payDays)].sort((a, b) => a - b),
       weekStartsOn: input.weekStartsOn as WeekStart,
       timezone: input.timezone,
     };
-    const before = repos.settings.get();
     repos.settings.update(settings);
     if (before.baseCurrency !== settings.baseCurrency || before.weekStartsOn !== settings.weekStartsOn) {
       invalidateSnapshotsFrom(deps, [ALL_MONTHS]);
