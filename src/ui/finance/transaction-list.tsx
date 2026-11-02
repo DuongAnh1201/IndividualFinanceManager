@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { friendlyDate } from "./dates";
 import { formatMoney } from "@/domain/money";
 import { Penny } from "@/ui/mascots";
 import { ConfirmAction } from "./confirm-action";
@@ -39,7 +40,7 @@ export function TransactionList({
             <div className="transaction-details">
               <div className="row-heading">
                 <span className="pill">{kind === "income" ? "Income" : "Expense"}</span>
-                <time dateTime={value.date}>{value.date}</time>
+                <time dateTime={value.date}>{friendlyDate(value.date, options.today)}</time>
               </div>
               <h2>{title}</h2>
               <p className="muted">

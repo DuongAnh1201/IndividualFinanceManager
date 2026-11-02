@@ -1,11 +1,14 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import localFont from "next/font/local";
 import Link from "next/link";
 import { Penny } from "@/ui/mascots";
 import { Navigation } from "@/ui/navigation";
+import { PayDayBanner } from "@/ui/payday-banner";
+import { ServiceWorkerRegister } from "@/ui/service-worker";
 import { SubscriptionSync } from "@/ui/finance/subscription-sync";
 import { syncDueSubscriptions } from "./actions";
+import { dismissPayDay, loadPayDayReminders } from "./payday-actions";
 import "./globals.css";
 
 const nunito = localFont({
@@ -17,12 +20,17 @@ const nunito = localFont({
 export const metadata: Metadata = {
   title: { default: "Cozy Coins", template: "%s · Cozy Coins" },
   description: "A cozy place for your everyday money.",
+  applicationName: "Cozy Coins",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: { capable: true, title: "Cozy Coins", statusBarStyle: "default" },
 };
+export const viewport: Viewport = { themeColor: "#7C8C78" };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className={nunito.variable}>
       <body>
+        <ServiceWorkerRegister />
         <a href="#main-content" className="skip-link">
           Skip to content
         </a>
@@ -52,6 +60,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             </header>
             <main id="main-content" tabIndex={-1}>
               <SubscriptionSync sync={syncDueSubscriptions} />
+              <PayDayBanner load={loadPayDayReminders} dismiss={dismissPayDay} />
               {children}
             </main>
             <footer>
