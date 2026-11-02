@@ -584,6 +584,10 @@ export function createRepositories(db: Db) {
       const row = db.select().from(s.monthlyReport).where(eq(s.monthlyReport.month, month)).get();
       return row ? (row.payload as D.MonthlyReport) : undefined;
     },
+    /** Drop a stale snapshot; it is rebuilt on the next open (services invalidate on writes to closed months). */
+    delete(month: D.IsoMonth): void {
+      db.delete(s.monthlyReport).where(eq(s.monthlyReport.month, month)).run();
+    },
     upsert(month: D.IsoMonth, report: D.MonthlyReport, generatedAt: D.IsoTimestamp): void {
       if (month !== report.month) throw new Error("Report month does not match key");
       const row = { month, payload: report, generated_at: m.utc(generatedAt) };

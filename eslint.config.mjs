@@ -51,6 +51,23 @@ export default defineConfig([
     },
   },
   {
+    // Services orchestrate domain rules + db repositories; they must not reach into the UI/app layers.
+    files: ["src/services/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["@/app", "@/app/*", "@/ui", "@/ui/*", "react", "react-*", "next", "next/*"],
+              message: "src/services may import domain + db, not app/ui/react/next.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     // UI must not touch the database directly.
     files: ["src/ui/**/*.{ts,tsx}"],
     rules: {

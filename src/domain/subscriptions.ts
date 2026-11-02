@@ -1,3 +1,4 @@
+import { isCurrencyCode } from "./money";
 import { clampDay, monthOf, parseDate } from "./period";
 import type {
   Category,
@@ -54,6 +55,11 @@ export interface PostDueInput {
   postedKeys: ReadonlySet<string>;
   /** Used to default the expense's bottle from its category. */
   categories: readonly Pick<Category, "id" | "defaultBottleId">[];
+  /**
+   * When given, a category default pointing at a missing or archived bottle yields a null
+   * bottle (D-018) instead of an archived one.
+   */
+  bottles?: readonly { id: Id; archivedAt: IsoTimestamp | null }[];
   today: IsoDate;
   /** Timestamp for createdAt/updatedAt (injected; domain never reads the clock). */
   now: IsoTimestamp;
@@ -68,8 +74,14 @@ export interface PostDueInput {
  * time (BR-8).
  */
 export function postDueSubscriptionExpenses(input: PostDueInput): Expense[] {
-  const { subscriptions, postedKeys, categories, today, now, newId } = input;
-  const bottleByCategory = new Map(categories.map((c) => [c.id, c.defaultBottleId]));
+  const { subscriptions, postedKeys, categories, bottles, today, now, newId } = input;
+  const usable = bottles ? new Set(bottles.filter((b) => b.archivedAt === null).map((b) => b.id)) : null;
+  const bottleByCategory = new Map(
+    categories.map((c) => [
+      c.id,
+      c.defaultBottleId !== null && usable && !usable.has(c.defaultBottleId) ? null : c.defaultBottleId,
+    ]),
+  );
   const seen = new Set(postedKeys);
   const out: Expense[] = [];
   for (const sub of subscriptions) {
@@ -158,4 +170,71 @@ export function monthlyTotalsByCurrency(
   return [...totals.entries()]
     .sort(([a], [b]) => (a < b ? -1 : 1))
     .map(([currency, amountMinor]) => ({ currency, amountMinor }));
+}
+
+export interface SubscriptionInput {
+  name: string;
+  amountMinor: number;
+  currency: string;
+  categoryId: Id;
+  paymentMethodId: Id;
+  billingDay: number;
+  startDate: IsoDate;
+}
+
+export interface SubscriptionError {
+  code:
+    | "empty-name"
+    | "invalid-amount"
+    | "unknown-currency"
+    | "unknown-category"
+    | "archived-category"
+    | "unknown-payment-method"
+    | "archived-payment-method"
+    | "invalid-billing-day"
+    | "invalid-start-date";
+  field: keyof SubscriptionInput;
+  message: string;
+}
+
+export type ValidSubscription = Omit<SubscriptionInput, "currency"> & { currency: CurrencyCode };
+
+export type SubscriptionValidation =
+  { ok: true; value: ValidSubscription } | { ok: false; errors: SubscriptionError[] };
+
+/** Validate a subscription's editable fields. Pure; returns all errors at once. */
+export function validateSubscription(
+  input: SubscriptionInput,
+  ctx: {
+    categories: readonly Pick<Category, "id" | "archivedAt">[];
+    paymentMethods: readonly { id: Id; archivedAt: IsoTimestamp | null }[];
+  },
+): SubscriptionValidation {
+  const errors: SubscriptionError[] = [];
+  const fail = (code: SubscriptionError["code"], field: SubscriptionError["field"], message: string) =>
+    errors.push({ code, field, message });
+
+  const name = typeof input.name === "string" ? input.name.trim() : "";
+  if (name === "") fail("empty-name", "name", "Name must not be empty.");
+  if (!Number.isSafeInteger(input.amountMinor) || input.amountMinor <= 0) {
+    fail("invalid-amount", "amountMinor", "Amount must be a positive whole number of minor units.");
+  }
+  const currency = isCurrencyCode(input.currency) ? input.currency : null;
+  if (!currency) fail("unknown-currency", "currency", `Unknown currency: ${String(input.currency)}`);
+  const cat = ctx.categories.find((c) => c.id === input.categoryId);
+  if (!cat) fail("unknown-category", "categoryId", "Unknown category.");
+  else if (cat.archivedAt) fail("archived-category", "categoryId", "Category is archived.");
+  const pm = ctx.paymentMethods.find((p) => p.id === input.paymentMethodId);
+  if (!pm) fail("unknown-payment-method", "paymentMethodId", "Unknown payment method.");
+  else if (pm.archivedAt) fail("archived-payment-method", "paymentMethodId", "Payment method is archived.");
+  if (!Number.isInteger(input.billingDay) || input.billingDay < 1 || input.billingDay > 31) {
+    fail("invalid-billing-day", "billingDay", "Billing day must be 1–31.");
+  }
+  try {
+    parseDate(input.startDate);
+  } catch {
+    fail("invalid-start-date", "startDate", `Invalid start date: ${String(input.startDate)}`);
+  }
+  if (errors.length > 0 || !currency) return { ok: false, errors };
+  return { ok: true, value: { ...input, name, currency } };
 }

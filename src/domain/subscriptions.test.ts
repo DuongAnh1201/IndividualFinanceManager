@@ -7,6 +7,7 @@ import {
   nextChargeDate,
   owedCharges,
   postDueSubscriptionExpenses,
+  validateSubscription,
 } from "./subscriptions";
 import type { Subscription } from "./types";
 
@@ -196,5 +197,90 @@ describe("monthlyTotalsByCurrency", () => {
       { currency: "VND", amountMinor: 99000 },
     ]);
     expect(monthlyTotalsByCurrency([], "2026-03-01")).toEqual([]);
+  });
+});
+
+describe("validateSubscription", () => {
+  const ctx = {
+    categories: [
+      { id: "c", archivedAt: null },
+      { id: "ca", archivedAt: "x" },
+    ],
+    paymentMethods: [
+      { id: "p", archivedAt: null },
+      { id: "pa", archivedAt: "x" },
+    ],
+  };
+  const good = {
+    name: " Netflix ",
+    amountMinor: 1599,
+    currency: "USD",
+    categoryId: "c",
+    paymentMethodId: "p",
+    billingDay: 15,
+    startDate: "2026-01-10",
+  };
+  const codes = (r: ReturnType<typeof validateSubscription>) => (r.ok ? [] : r.errors.map((e) => e.code));
+
+  it("accepts and trims", () => {
+    const r = validateSubscription(good, ctx);
+    expect(r.ok && r.value.name).toBe("Netflix");
+  });
+  it("reports all errors", () => {
+    expect(
+      codes(
+        validateSubscription(
+          {
+            ...good,
+            name: " ",
+            amountMinor: 0,
+            currency: "EUR",
+            categoryId: "x",
+            paymentMethodId: "x",
+            billingDay: 32,
+            startDate: "nope",
+          },
+          ctx,
+        ),
+      ),
+    ).toEqual([
+      "empty-name",
+      "invalid-amount",
+      "unknown-currency",
+      "unknown-category",
+      "unknown-payment-method",
+      "invalid-billing-day",
+      "invalid-start-date",
+    ]);
+  });
+  it("rejects archived category / payment method and bad billing day", () => {
+    expect(codes(validateSubscription({ ...good, categoryId: "ca", paymentMethodId: "pa" }, ctx))).toEqual([
+      "archived-category",
+      "archived-payment-method",
+    ]);
+    expect(codes(validateSubscription({ ...good, billingDay: 0 }, ctx))).toEqual(["invalid-billing-day"]);
+    expect(codes(validateSubscription({ ...good, billingDay: 1.5 }, ctx))).toEqual(["invalid-billing-day"]);
+  });
+});
+
+describe("autopost with archived default bottle (D-018)", () => {
+  it("uses a null bottle when the category's default bottle is archived or missing", () => {
+    const base = {
+      subscriptions: [sub({ startDate: "2026-03-01" })],
+      postedKeys: new Set<string>(),
+      categories: cats,
+      today: "2026-03-20",
+      now: NOW,
+      newId: () => "e",
+    };
+    const archived = postDueSubscriptionExpenses({
+      ...base,
+      bottles: [{ id: "necessities", archivedAt: "x" }],
+    });
+    expect(archived[0]?.bottleId).toBeNull();
+    const missing = postDueSubscriptionExpenses({ ...base, bottles: [] });
+    expect(missing[0]?.bottleId).toBeNull();
+    const live = postDueSubscriptionExpenses({ ...base, bottles: [{ id: "necessities", archivedAt: null }] });
+    expect(live[0]?.bottleId).toBe("necessities");
   });
 });
