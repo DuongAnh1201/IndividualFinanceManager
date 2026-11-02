@@ -132,3 +132,15 @@ export function parseMoneyInput(text: string, currency: CurrencyCode): ParseMone
   if (!Number.isSafeInteger(amountMinor)) return { ok: false, error: "too-large" };
   return { ok: true, amountMinor };
 }
+
+/** Exact decimal string for an amount, e.g. 1250 USD → "12.50", 50000 VND → "50000", -5 USD → "-0.05". */
+export function minorToDecimalString(amountMinor: number, currency: CurrencyCode): string {
+  if (!Number.isSafeInteger(amountMinor)) {
+    throw new RangeError(`amountMinor must be a safe integer: ${amountMinor}`);
+  }
+  const exp = currencyExponent(currency);
+  const sign = amountMinor < 0 ? "-" : "";
+  const digits = String(Math.abs(amountMinor)).padStart(exp + 1, "0");
+  if (exp === 0) return sign + digits;
+  return `${sign}${digits.slice(0, -exp)}.${digits.slice(-exp)}`;
+}
