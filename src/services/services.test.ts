@@ -20,6 +20,7 @@ import {
   runSubscriptionAutopost,
   snapshotClosedMonths,
   updateIncome,
+  updateSettings,
   updateSubscription,
 } from "./index";
 import { fail } from "./result";
@@ -51,7 +52,7 @@ function unwrap<T>(r: { ok: true; value: T } | { ok: false; errors: unknown[] })
 describe("expenses", () => {
   it("adds with category's default bottle and timestamps", () => {
     const d = makeDeps();
-    const e = unwrap(addExpense(d, expenseInput));
+    const e = unwrap(addExpense(d, expenseInput)).expense;
     expect(e).toMatchObject({ source: "manual", bottleId: "N", subscriptionId: null, billingMonth: null });
     expect(d.store.expenses).toHaveLength(1);
   });
@@ -68,7 +69,7 @@ describe("expenses", () => {
     unwrap(createSubscription(d, subInput));
     const posted = runSubscriptionAutopost(d, "2026-11-12");
     const charge = posted[0]!;
-    const edited = unwrap(
+    const { expense: edited } = unwrap(
       editExpense(d, charge.id, {
         ...expenseInput,
         date: charge.date,
@@ -97,7 +98,7 @@ describe("expenses", () => {
 
   it("deletes manual expenses; unknown ids are not-found", () => {
     const d = makeDeps();
-    const e = unwrap(addExpense(d, expenseInput));
+    const e = unwrap(addExpense(d, expenseInput)).expense;
     unwrap(deleteExpense(d, e.id));
     expect(d.store.expenses).toHaveLength(0);
     const r = deleteExpense(d, "zzz");
@@ -320,7 +321,7 @@ describe("failed results never commit", () => {
   it("atomic rolls back writes made before a failed Result", () => {
     const d = makeDeps();
     const r = atomic(d, () => {
-      d.repos.expenses.insert({ ...unwrap(addExpense(makeDeps(), expenseInput)), id: "x" });
+      d.repos.expenses.insert({ ...unwrap(addExpense(makeDeps(), expenseInput)).expense, id: "x" });
       d.repos.reminders.upsert({ slot: "2026-11-10", status: "done", resolvedAt: "t" });
       return fail([{ code: "late", field: "f", message: "detected late" }]);
     });
@@ -498,5 +499,78 @@ describe("reminder start policy", () => {
     const d = makeDeps({ today: "2026-11-12" });
     d.store.settings.firstUsedOn = "2027-05-01";
     expect(getReminderStart(d)).toBe("2026-11-12");
+  });
+});
+
+describe("limit crossing on expense save (BR-6)", () => {
+  const setup = (percent = 80) => {
+    const d = makeDeps();
+    d.store.settings.limitWarningPercent = percent;
+    d.store.livingLimits.push({ month: "2026-11", limitMinor: 10_000 });
+    return d;
+  };
+
+  it("reports warning, then over, then nothing once already over", () => {
+    const d = setup();
+    const a = unwrap(addExpense(d, { ...expenseInput, amountMinor: 7_000 }));
+    expect(a.crossing).toBeNull();
+    expect(a.allowance).toEqual({ leftMinor: 3_000, daysLeft: 19, perDayMinor: 157 });
+    const b = unwrap(addExpense(d, { ...expenseInput, amountMinor: 1_000 }));
+    expect(b.crossing).toBe("warning");
+    expect(b.status).toMatchObject({ status: "warning", spentMinor: 8_000 });
+    const c = unwrap(addExpense(d, { ...expenseInput, amountMinor: 2_500 }));
+    expect(c.crossing).toBe("over");
+    expect(c.allowance).toMatchObject({ leftMinor: -500, perDayMinor: 0 });
+    expect(unwrap(addExpense(d, { ...expenseInput, amountMinor: 100 })).crossing).toBeNull();
+  });
+
+  it("honours the configured warning level", () => {
+    const d = setup(50);
+    expect(unwrap(addExpense(d, { ...expenseInput, amountMinor: 5_000 })).crossing).toBe("warning");
+    const d2 = setup(95);
+    expect(unwrap(addExpense(d2, { ...expenseInput, amountMinor: 9_000 })).crossing).toBeNull();
+    expect(unwrap(addExpense(d2, { ...expenseInput, amountMinor: 500 })).crossing).toBe("warning");
+  });
+
+  it("is null without a limit, and for non-living categories", () => {
+    const d = makeDeps();
+    const r = unwrap(addExpense(d, expenseInput));
+    expect(r).toMatchObject({ crossing: null, status: null, allowance: null });
+    const d2 = setup();
+    expect(
+      unwrap(addExpense(d2, { ...expenseInput, categoryId: "subs", amountMinor: 20_000 })).crossing,
+    ).toBeNull();
+  });
+
+  it("editing up crosses; editing down does not", () => {
+    const d = setup();
+    const e = unwrap(addExpense(d, { ...expenseInput, amountMinor: 1_000 })).expense;
+    const up = unwrap(editExpense(d, e.id, { ...expenseInput, amountMinor: 9_000 }));
+    expect(up.crossing).toBe("warning");
+    const down = unwrap(editExpense(d, e.id, { ...expenseInput, amountMinor: 500 }));
+    expect(down.crossing).toBeNull();
+    expect(down.status?.status).toBe("ok");
+  });
+
+  it("past-month expense has no per-day figure", () => {
+    const d = setup();
+    d.store.livingLimits.push({ month: "2026-10", limitMinor: 5_000 });
+    const r = unwrap(addExpense(d, { ...expenseInput, date: "2026-10-03", amountMinor: 4_500 }));
+    expect(r.crossing).toBe("warning");
+    expect(r.allowance).toEqual({ leftMinor: 500, daysLeft: null, perDayMinor: null });
+  });
+});
+
+describe("settings: warning level", () => {
+  const base = { baseCurrency: "USD", payDays: [10, 25], weekStartsOn: 1, timezone: "UTC" };
+  it("validates 50–99, keeps stored value when omitted, drops snapshots when changed", () => {
+    const d = makeDeps();
+    for (const v of [49, 100, 80.5]) {
+      const r = updateSettings(d, { ...base, limitWarningPercent: v });
+      expect(!r.ok && r.errors[0]?.code).toBe("invalid-warning-percent");
+    }
+    expect(unwrap(updateSettings(d, { ...base, limitWarningPercent: 90 })).limitWarningPercent).toBe(90);
+    expect(unwrap(updateSettings(d, base)).limitWarningPercent).toBe(90);
+    expect(getDashboard(d).limitWarningPercent).toBe(90);
   });
 });

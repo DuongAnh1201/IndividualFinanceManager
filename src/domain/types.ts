@@ -39,7 +39,7 @@ export interface Settings {
   weekStartsOn: WeekStart;
   /** IANA zone, e.g. "America/Los_Angeles". */
   timezone: string;
-  /** Living-limit warning threshold as an integer percentage, default 80. */
+  /** Living-limit warning level, integer 50–99, default 80 (BR-6, D-023). */
   limitWarningPercent: number;
 }
 

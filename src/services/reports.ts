@@ -1,5 +1,10 @@
 import { bottleBalances } from "../domain/bottleBalances";
-import { livingLimitStatusFor, livingSpent } from "../domain/livingLimit";
+import {
+  livingLimitStatusFor,
+  livingSpent,
+  remainingAllowance,
+  type RemainingAllowance,
+} from "../domain/livingLimit";
 import { addDays, monthOf, periodOf } from "../domain/period";
 import { pendingReminders } from "../domain/reminders";
 import {
@@ -56,6 +61,7 @@ function loadReportData({ repos }: ServiceDeps, balancesBefore?: IsoDate): { dat
       exchangeRates,
       livingLimits: repos.livingLimits.list(),
       bottleBalances: result.balances,
+      limitWarningPercent: settings.limitWarningPercent,
     },
   };
 }
@@ -122,6 +128,9 @@ export interface UpcomingSubscription {
 export interface Dashboard {
   month: IsoMonth;
   livingLimit: LivingLimitStatus | null;
+  /** Left to spend this month (BR-6); null when no limit is set. */
+  allowance: RemainingAllowance | null;
+  limitWarningPercent: number;
   /** Counted expenses lacking an FX rate; excluded from the living total (BR-8). */
   livingMissingRateExpenseIds: Id[];
   bottleBalances: BottleBalance[];
@@ -142,9 +151,17 @@ export function getDashboard(deps: ServiceDeps, today?: IsoDate, upcomingDays = 
     .filter((x): x is { subscription: Subscription; next: IsoDate } => x.next !== null && x.next <= horizon)
     .sort((a, b) => (a.next < b.next ? -1 : a.next > b.next ? 1 : 0))
     .map((x) => ({ subscription: x.subscription, nextChargeDate: x.next }));
+  const livingLimit = livingLimitStatusFor(
+    month,
+    data.livingLimits,
+    spent.spentMinor,
+    data.limitWarningPercent,
+  );
   return {
     month,
-    livingLimit: livingLimitStatusFor(month, data.livingLimits, spent.spentMinor),
+    livingLimit,
+    allowance: livingLimit ? remainingAllowance(livingLimit, t) : null,
+    limitWarningPercent: repos.settings.get().limitWarningPercent,
     livingMissingRateExpenseIds: spent.missingRateExpenseIds,
     bottleBalances: [...data.bottleBalances],
     pendingReminders: pendingReminders({

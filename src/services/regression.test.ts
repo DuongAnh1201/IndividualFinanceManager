@@ -87,9 +87,9 @@ describe("expense validation + bottle defaulting (BR-2)", () => {
 
   it("defaults the bottle from the category and honours an explicit one", () => {
     const { d, r, repos } = setup();
-    const dining = unwrap(addExpense(d, base(r, { categoryId: r.category("Dining").id })));
+    const dining = unwrap(addExpense(d, base(r, { categoryId: r.category("Dining").id }))).expense;
     expect(dining.bottleId).toBe(r.bottle("Play").id);
-    const explicit = unwrap(addExpense(d, base(r, { bottleId: r.bottle("Give").id })));
+    const explicit = unwrap(addExpense(d, base(r, { bottleId: r.bottle("Give").id }))).expense;
     expect(explicit.bottleId).toBe(r.bottle("Give").id);
     expect(repos.expenses.get(dining.id)?.bottleId).toBe(r.bottle("Play").id);
   });
@@ -106,7 +106,7 @@ describe("expense validation + bottle defaulting (BR-2)", () => {
     const { d, r, repos } = setup();
     const play = r.bottle("Play");
     repos.bottles.archive(play.id, "2026-11-01T00:00:00.000Z");
-    const dining = unwrap(addExpense(d, base(r, { categoryId: r.category("Dining").id })));
+    const dining = unwrap(addExpense(d, base(r, { categoryId: r.category("Dining").id }))).expense;
     expect(dining.bottleId).toBeNull();
     const shopping = r.category("Shopping");
     repos.categories.archive(shopping.id, "2026-11-01T00:00:00.000Z");

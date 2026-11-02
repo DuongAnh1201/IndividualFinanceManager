@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  isValidWarningPercent,
+  limitCrossing,
   livingLimitStatus,
   livingLimitStatusFor,
   livingSpent,
+  remainingAllowance,
   resolveLimit,
   suggestedLimit,
 } from "./livingLimit";
@@ -213,5 +216,86 @@ describe("suggestedLimit", () => {
       limitMinor: 0,
       missingRateIncomeIds: [],
     });
+  });
+});
+
+describe("configurable warning level", () => {
+  it("validates 50–99 integers only", () => {
+    for (const v of [50, 80, 99]) expect(isValidWarningPercent(v)).toBe(true);
+    for (const v of [49, 100, 80.5, NaN, "80", null]) expect(isValidWarningPercent(v)).toBe(false);
+  });
+
+  it("uses W for the ok/warning boundary with integer math", () => {
+    expect(livingLimitStatus("2026-11", 1000, 899, 90).status).toBe("ok");
+    expect(livingLimitStatus("2026-11", 1000, 900, 90).status).toBe("warning");
+    expect(livingLimitStatus("2026-11", 1000, 999, 90).status).toBe("warning");
+    expect(livingLimitStatus("2026-11", 1000, 1000, 90).status).toBe("over");
+    expect(livingLimitStatus("2026-11", 1000, 500, 50).status).toBe("warning");
+    expect(livingLimitStatus("2026-11", 1000, 800).status).toBe("warning");
+    expect(() => livingLimitStatus("2026-11", 1000, 800, 100)).toThrow(RangeError);
+  });
+});
+
+describe("limitCrossing", () => {
+  const st = (status: "ok" | "warning" | "over", month = "2026-11") => ({
+    month,
+    limitMinor: 1000,
+    spentMinor: 0,
+    ratio: 0,
+    status,
+  });
+  it("alerts only when moving up into warning or over", () => {
+    expect(limitCrossing(st("ok"), st("warning"))).toBe("warning");
+    expect(limitCrossing(st("ok"), st("over"))).toBe("over");
+    expect(limitCrossing(st("warning"), st("over"))).toBe("over");
+  });
+  it("is null when level, going down, no limit or across months", () => {
+    expect(limitCrossing(st("ok"), st("ok"))).toBeNull();
+    expect(limitCrossing(st("warning"), st("warning"))).toBeNull();
+    expect(limitCrossing(st("over"), st("over"))).toBeNull();
+    expect(limitCrossing(st("over"), st("warning"))).toBeNull();
+    expect(limitCrossing(st("warning"), st("ok"))).toBeNull();
+    expect(limitCrossing(null, st("over"))).toBeNull();
+    expect(limitCrossing(st("ok"), null)).toBeNull();
+    expect(limitCrossing(st("ok", "2026-10"), st("over"))).toBeNull();
+  });
+});
+
+describe("remainingAllowance", () => {
+  const status = (limitMinor: number, spentMinor: number) => ({
+    month: "2026-11",
+    limitMinor,
+    spentMinor,
+    ratio: 0,
+    status: "ok" as const,
+  });
+  it("current month: days left include today, per day floors", () => {
+    // Nov 12 → 19 days left (12..30).
+    expect(remainingAllowance(status(10_000, 0), "2026-11-12")).toEqual({
+      leftMinor: 10_000,
+      daysLeft: 19,
+      perDayMinor: 526,
+    });
+    expect(remainingAllowance(status(10_000, 0), "2026-11-30").daysLeft).toBe(1);
+  });
+  it("over or exactly spent: negative/zero left, per day 0", () => {
+    expect(remainingAllowance(status(1000, 1500), "2026-11-12")).toEqual({
+      leftMinor: -500,
+      daysLeft: 19,
+      perDayMinor: 0,
+    });
+    expect(remainingAllowance(status(1000, 1000), "2026-11-12").perDayMinor).toBe(0);
+  });
+  it("past or future month: daysLeft and perDay are null", () => {
+    expect(remainingAllowance(status(1000, 400), "2026-12-01")).toEqual({
+      leftMinor: 600,
+      daysLeft: null,
+      perDayMinor: null,
+    });
+    expect(remainingAllowance(status(1000, 400), "2026-10-31").daysLeft).toBeNull();
+  });
+  it("handles February in leap years", () => {
+    const feb = { ...status(2900, 0), month: "2028-02" };
+    expect(remainingAllowance(feb, "2028-02-01")).toMatchObject({ daysLeft: 29, perDayMinor: 100 });
   });
 });

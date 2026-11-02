@@ -2,7 +2,15 @@ import { activeRuleVersion, allocateIncome } from "../domain/bottleSplit";
 import { validateExpense, type ExpenseInput } from "../domain/expense";
 import { validateIncome, type IncomeInput } from "../domain/income";
 import { completeReminder } from "../domain/reminders";
-import type { Expense, Id, Income } from "../domain/types";
+import type { Expense, Id, Income, IsoMonth, LivingLimitStatus } from "../domain/types";
+import {
+  livingLimitStatusFor,
+  livingSpent,
+  limitCrossing,
+  remainingAllowance,
+  type RemainingAllowance,
+} from "../domain/livingLimit";
+import { monthOf } from "../domain/period";
 import { fail, notFound, ok, type FieldError, type Result } from "./result";
 import type { ServiceDeps } from "./ports";
 import { atomic, invalidateSnapshotsFrom, reopenSlotIfOrphaned } from "./support";
@@ -17,12 +25,51 @@ function expenseContext({ repos }: ServiceDeps) {
   };
 }
 
+export interface ExpenseSaved {
+  expense: Expense;
+  /** BR-6: alert this write caused for the expense's month, else null. */
+  crossing: "warning" | "over" | null;
+  /** That month's living-limit status after the write; null when no limit is set. */
+  status: LivingLimitStatus | null;
+  /** Left to spend after the write; null when no limit is set. */
+  allowance: RemainingAllowance | null;
+}
+
+function livingStatus(deps: ServiceDeps, month: IsoMonth): LivingLimitStatus | null {
+  const { repos } = deps;
+  const settings = repos.settings.get();
+  const spent = livingSpent(
+    repos.expenses.list(),
+    repos.categories.list(),
+    month,
+    settings.baseCurrency,
+    repos.exchangeRates.list(),
+  );
+  return livingLimitStatusFor(
+    month,
+    repos.livingLimits.list(),
+    spent.spentMinor,
+    settings.limitWarningPercent,
+  );
+}
+
+function saved(deps: ServiceDeps, expense: Expense, before: LivingLimitStatus | null): ExpenseSaved {
+  const status = livingStatus(deps, monthOf(expense.date));
+  return {
+    expense,
+    crossing: limitCrossing(before, status),
+    status,
+    allowance: status ? remainingAllowance(status, deps.clock.today()) : null,
+  };
+}
+
 /** Validate (BR-2) and save a manual expense. */
-export function addExpense(deps: ServiceDeps, input: ExpenseInput): Result<Expense, FieldError> {
+export function addExpense(deps: ServiceDeps, input: ExpenseInput): Result<ExpenseSaved, FieldError> {
   const { repos, clock } = deps;
   return atomic(deps, () => {
     const v = validateExpense(input, expenseContext(deps));
     if (!v.ok) return fail(v.errors);
+    const before = livingStatus(deps, monthOf(v.value.date));
     const now = clock.now();
     const expense: Expense = {
       id: clock.newId(),
@@ -33,12 +80,16 @@ export function addExpense(deps: ServiceDeps, input: ExpenseInput): Result<Expen
     };
     repos.expenses.insert(expense);
     invalidateSnapshotsFrom(deps, [expense.date]);
-    return ok(expense);
+    return ok(saved(deps, expense, before));
   });
 }
 
 /** Edit an expense; keeps its source / subscriptionId / billingMonth / createdAt. */
-export function editExpense(deps: ServiceDeps, id: Id, input: ExpenseInput): Result<Expense, FieldError> {
+export function editExpense(
+  deps: ServiceDeps,
+  id: Id,
+  input: ExpenseInput,
+): Result<ExpenseSaved, FieldError> {
   const { repos, clock } = deps;
   return atomic(deps, () => {
     const existing = repos.expenses.get(id);
@@ -59,6 +110,7 @@ export function editExpense(deps: ServiceDeps, id: Id, input: ExpenseInput): Res
         },
       ]);
     }
+    const before = livingStatus(deps, monthOf(v.value.date));
     const expense: Expense = {
       ...existing,
       date: v.value.date,
@@ -73,7 +125,7 @@ export function editExpense(deps: ServiceDeps, id: Id, input: ExpenseInput): Res
     };
     repos.expenses.update(expense);
     invalidateSnapshotsFrom(deps, [existing.date, expense.date]);
-    return ok(expense);
+    return ok(saved(deps, expense, before));
   });
 }
 
