@@ -3,16 +3,6 @@ import { notFound } from "next/navigation";
 import { EmptyState } from "@/ui/empty-state";
 
 const sections: Record<string, { title: string; description: string }> = {
-  transactions: {
-    title: "Transactions",
-    description:
-      "Your expense and income history will live here, with filters and editing. No transactions are loaded yet.",
-  },
-  subscriptions: {
-    title: "Subscriptions",
-    description:
-      "A home for recurring expenses, upcoming charges and monthly totals. Subscription management is coming in a later phase.",
-  },
   bottles: {
     title: "Income & Bottles",
     description:
@@ -27,11 +17,6 @@ const sections: Record<string, { title: string; description: string }> = {
     title: "Settings",
     description:
       "Bottle ratios, categories, currencies, pay days and backups will be managed here. Settings controls are coming in a later phase.",
-  },
-  "quick-add": {
-    title: "Quick add",
-    description:
-      "Expense and income entry will be available here in the next phase. This preview does not save transactions yet.",
   },
 };
 export function generateStaticParams() {
