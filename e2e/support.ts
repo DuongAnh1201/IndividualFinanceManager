@@ -33,9 +33,6 @@ export function trackErrors(page: Page): string[] {
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(`pageerror: ${e.message}`));
   page.on("console", (m) => {
-    // KNOWN ISSUE: the app ships no favicon, so every page logs a 404 for /favicon.ico (reported to codex1).
-    // Skipped so tests guard everything else; remove this line once an icon is added.
-    if (m.location().url.endsWith("/favicon.ico")) return;
     if (m.type() === "error") errors.push(`console: ${m.text()}`);
   });
   return errors;
