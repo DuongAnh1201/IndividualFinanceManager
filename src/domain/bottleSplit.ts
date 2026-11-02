@@ -9,6 +9,9 @@ export interface SplitShare {
  * BR-3: share_i = floor(amount × ratio_i / Σ ratios); the remainder goes to the
  * first bottle so shares sum exactly to the amount. Works in the income's own
  * currency (minor units, integers only).
+ *
+ * D-016: `ratios` must be ordered by bottle `sortOrder`; the remainder goes to
+ * `ratios[0]` (Necessities by default).
  */
 export function splitIncome(amountMinor: number, ratios: readonly BottleRatio[]): SplitShare[] {
   if (!Number.isSafeInteger(amountMinor) || amountMinor <= 0) {
