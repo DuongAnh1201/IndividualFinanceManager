@@ -5,7 +5,13 @@ import { settings } from "./schema";
 type SettingsDb = Pick<ReturnType<typeof openDatabase>["db"], "select" | "update">;
 /** Called after migrations. Existing installations retain their earliest recorded activity. */
 export function initializeFirstUse(db: SettingsDb, now = new Date()): void {
-  const row = db.select().from(settings).where(eq(settings.id, 1)).get();
+  // Select only fields this initializer owns so test/restore helpers can seed a
+  // staged database from before later settings columns were introduced.
+  const row = db
+    .select({ id: settings.id, timezone: settings.timezone, first_used_on: settings.first_used_on })
+    .from(settings)
+    .where(eq(settings.id, 1))
+    .get();
   if (!row) throw new Error("Settings missing; run db:seed first");
   if (row.first_used_on !== null) return;
   const oldest = db

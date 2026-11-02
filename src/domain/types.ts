@@ -39,6 +39,8 @@ export interface Settings {
   weekStartsOn: WeekStart;
   /** IANA zone, e.g. "America/Los_Angeles". */
   timezone: string;
+  /** Living-limit warning threshold as an integer percentage, default 80. */
+  limitWarningPercent: number;
 }
 
 export type PaymentMethodType = "credit" | "debit" | "cash";

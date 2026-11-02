@@ -22,6 +22,13 @@
       "when": 1793595368031,
       "tag": "0002_wooden_human_robot",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1793634153940,
+      "tag": "0003_aspiring_talisman",
+      "breakpoints": true
     }
   ]
 }
