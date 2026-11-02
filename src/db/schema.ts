@@ -19,6 +19,7 @@ export const settings = sqliteTable(
     pay_days: text("pay_days", { mode: "json" }).$type<number[]>().notNull().default([10, 25]),
     week_starts_on: integer("week_starts_on").notNull().default(1),
     timezone: text("timezone").notNull(),
+    first_used_on: text("first_used_on"),
   },
   (t) => [
     check("settings_currency", sql`${t.base_currency} IN ('USD','VND')`),

@@ -58,7 +58,13 @@ export function seedStore(): Store {
     archivedAt: null,
   });
   return {
-    settings: { baseCurrency: "USD", payDays: [10, 25], weekStartsOn: 1, timezone: "UTC" },
+    settings: {
+      firstUsedOn: "2026-01-01",
+      baseCurrency: "USD",
+      payDays: [10, 25],
+      weekStartsOn: 1,
+      timezone: "UTC",
+    },
     paymentMethods: [{ id: "pm1", name: "Visa", type: "credit", last4: null, archivedAt: null }],
     categories: [
       cat("subs", "subscription", false, "N"),

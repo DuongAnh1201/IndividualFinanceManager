@@ -15,6 +15,13 @@
       "when": 1793593337724,
       "tag": "0001_calm_dexter_bennett",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1793595368031,
+      "tag": "0002_wooden_human_robot",
+      "breakpoints": true
     }
   ]
 }
