@@ -43,6 +43,20 @@ export function editExpense(deps: ServiceDeps, id: Id, input: ExpenseInput): Res
     if (!existing) return notFound("Expense");
     const v = validateExpense(input, expenseContext(deps));
     if (!v.ok) return fail(v.errors);
+    // Subscription charges: amount / note / payment method (and currency + rate with the
+    // amount) are editable; date and category stay tied to the billing month.
+    if (
+      existing.source === "subscription" &&
+      (v.value.date !== existing.date || v.value.categoryId !== existing.categoryId)
+    ) {
+      return fail([
+        {
+          code: "subscription-charge-locked",
+          field: v.value.date !== existing.date ? "date" : "categoryId",
+          message: "A subscription charge's date and category can't be changed.",
+        },
+      ]);
+    }
     const expense: Expense = {
       ...existing,
       date: v.value.date,

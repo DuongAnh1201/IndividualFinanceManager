@@ -1,6 +1,6 @@
 import { bottleBalances } from "../domain/bottleBalances";
 import { livingLimitStatusFor, livingSpent } from "../domain/livingLimit";
-import { addDays, monthOf, parseDate } from "../domain/period";
+import { addDays, monthOf, parseDate, periodOf } from "../domain/period";
 import { pendingReminders } from "../domain/reminders";
 import {
   buildComparisonSeries,
@@ -22,22 +22,28 @@ import type {
 } from "../domain/types";
 import type { ServiceDeps } from "./ports";
 
-function loadReportData({ repos }: ServiceDeps): { data: ReportData; missingBalanceRows: number } {
+/**
+ * Load everything the report builders need. Bottle balances are derived from rows dated
+ * before `balancesBefore` (exclusive) — pass a period's end to get month-end balances;
+ * omit for balances as of now.
+ */
+function loadReportData({ repos }: ServiceDeps, balancesBefore?: IsoDate): { data: ReportData } {
   const settings = repos.settings.get();
   const incomes = repos.incomes.list();
   const allocations = repos.allocations.list();
   const expenses = repos.expenses.list();
   const exchangeRates = repos.exchangeRates.list();
+  const before = <T extends { date: IsoDate }>(rows: T[]) =>
+    balancesBefore === undefined ? rows : rows.filter((r) => r.date < balancesBefore);
   const result = bottleBalances(
     repos.bottles.list(),
     allocations,
-    incomes,
-    repos.transfers.list(),
-    expenses,
+    before(incomes),
+    before(repos.transfers.list()),
+    before(expenses),
     settings.baseCurrency,
     exchangeRates,
   );
-  const m = result.missingRate;
   return {
     data: {
       baseCurrency: settings.baseCurrency,
@@ -50,9 +56,11 @@ function loadReportData({ repos }: ServiceDeps): { data: ReportData; missingBala
       livingLimits: repos.livingLimits.list(),
       bottleBalances: result.balances,
     },
-    missingBalanceRows: m.incomeIds.length + m.transferIds.length + m.expenseIds.length,
   };
 }
+
+/** First day after `month` (exclusive upper bound for month-end balances). */
+const monthEnd = (month: IsoMonth): IsoDate => periodOf("month", `${month}-01`).end;
 
 /** BR-7: a closed month returns its saved snapshot when present; otherwise computed live. */
 export function getMonthlyReport(deps: ServiceDeps, month: IsoMonth, today?: IsoDate): MonthlyReport {
@@ -61,7 +69,7 @@ export function getMonthlyReport(deps: ServiceDeps, month: IsoMonth, today?: Iso
     const snap = repos.monthlyReports.get(month);
     if (snap) return snap;
   }
-  return buildMonthlyReport(month, loadReportData(deps).data);
+  return buildMonthlyReport(month, loadReportData(deps, monthEnd(month)).data);
 }
 
 export function getComparison(
@@ -96,7 +104,11 @@ export function snapshotClosedMonths(deps: ServiceDeps, today?: IsoDate): IsoMon
     const first = months[0];
     if (!first) return [];
     const due = monthsNeedingSnapshot(first, t, repos.monthlyReports.months());
-    for (const m of due) repos.monthlyReports.upsert(m, buildMonthlyReport(m, data), now);
+    for (const m of due) {
+      // Past months use month-end bottle balances, not today's.
+      const monthData = loadReportData(deps, monthEnd(m)).data;
+      repos.monthlyReports.upsert(m, buildMonthlyReport(m, monthData), now);
+    }
     return due;
   });
 }

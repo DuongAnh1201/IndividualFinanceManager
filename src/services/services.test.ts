@@ -65,7 +65,22 @@ describe("expenses", () => {
     unwrap(createSubscription(d, subInput));
     const posted = runSubscriptionAutopost(d, "2026-11-12");
     const charge = posted[0]!;
-    const edited = unwrap(editExpense(d, charge.id, { ...expenseInput, categoryId: "subs", note: "hi" }));
+    const edited = unwrap(
+      editExpense(d, charge.id, {
+        ...expenseInput,
+        date: charge.date,
+        categoryId: "subs",
+        amountMinor: 1700,
+        note: "hi",
+      }),
+    );
+    expect(edited.amountMinor).toBe(1700);
+    expect(editExpense(d, charge.id, { ...expenseInput, date: "2026-10-20", categoryId: "subs" }).ok).toBe(
+      false,
+    );
+    expect(editExpense(d, charge.id, { ...expenseInput, date: charge.date, categoryId: "food" }).ok).toBe(
+      false,
+    );
     expect(edited).toMatchObject({
       source: "subscription",
       subscriptionId: charge.subscriptionId,
@@ -275,6 +290,20 @@ describe("reports", () => {
     d.store.reports.get("2026-11")!.report.totalSpendMinor = 123;
     expect(getMonthlyReport(d, "2026-11").totalSpendMinor).toBe(123);
     expect(getMonthlyReport(d, "2026-12").totalSpendMinor).toBe(0);
+  });
+
+  it("snapshots and closed-month reports use month-end bottle balances, not current ones", () => {
+    const d = makeDeps({ today: "2026-12-20" });
+    unwrap(addIncome(d, { ...incomeInput, date: "2026-11-10" })); // N +50_000 in Nov
+    unwrap(addIncome(d, { ...incomeInput, date: "2026-12-10" })); // N +50_000 in Dec
+    unwrap(addExpense(d, { ...expenseInput, date: "2026-12-05", amountMinor: 7_000 })); // N -7_000 in Dec
+    const nov = (r: ReturnType<typeof getMonthlyReport>) =>
+      r.bottleBalances.find((b) => b.bottleId === "N")?.balanceMinor;
+    expect(nov(getMonthlyReport(d, "2026-11"))).toBe(50_000);
+    snapshotClosedMonths(d);
+    expect(nov(d.store.reports.get("2026-11")!.report)).toBe(50_000);
+    // The current month reflects everything up to its end.
+    expect(nov(getMonthlyReport(d, "2026-12"))).toBe(50_000 + 50_000 - 7_000);
   });
 
   it("snapshot with no data writes nothing", () => {
