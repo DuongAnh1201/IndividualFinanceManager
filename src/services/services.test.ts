@@ -271,6 +271,7 @@ describe("reminders & dashboard", () => {
 
   it("dashboard: living limit, balances, pending slots, upcoming subs", () => {
     const d = makeDeps({ today: "2026-11-12" });
+    d.store.settings.firstUsedOn = "2026-11-01";
     d.store.livingLimits.push({ month: "2026-11", limitMinor: 10_000 });
     unwrap(addIncome(d, { ...incomeInput, payDaySlot: "2026-11-10" }));
     unwrap(addExpense(d, { ...expenseInput, amountMinor: 8_500 }));
@@ -464,17 +465,17 @@ describe("autopost and archived default bottle (D-018)", () => {
 });
 
 describe("reminder start policy", () => {
-  it("fresh database: current month start, no invented overdue slots", () => {
+  it("starts at Settings.firstUsedOn: no invented overdue slots before first use", () => {
     const d = makeDeps({ today: "2026-11-12" });
-    expect(getReminderStart(d)).toBe("2026-11-01");
-    expect(getPendingReminders(d)).toEqual(["2026-11-10"]);
-    expect(getDashboard(d).pendingReminders).toEqual(["2026-11-10"]);
+    d.store.settings.firstUsedOn = "2026-11-12";
+    expect(getReminderStart(d)).toBe("2026-11-12");
+    expect(getPendingReminders(d)).toEqual([]);
+    expect(getDashboard(d).pendingReminders).toEqual([]);
   });
 
-  it("uses the earliest income/expense/reminder date so older missed slots stay pending", () => {
+  it("missed slots after first use stay pending until resolved", () => {
     const d = makeDeps({ today: "2026-11-26" });
-    unwrap(addExpense(d, { ...expenseInput, date: "2026-09-05" }));
-    expect(getReminderStart(d)).toBe("2026-09-05");
+    d.store.settings.firstUsedOn = "2026-09-05";
     expect(getPendingReminders(d)).toEqual([
       "2026-09-10",
       "2026-09-25",
@@ -483,5 +484,19 @@ describe("reminder start policy", () => {
       "2026-11-10",
       "2026-11-25",
     ]);
+    unwrap(addIncome(d, { ...incomeInput, date: "2026-11-11" }));
+    expect(getPendingReminders(d)).toEqual([
+      "2026-09-10",
+      "2026-09-25",
+      "2026-10-10",
+      "2026-10-25",
+      "2026-11-25",
+    ]);
+  });
+
+  it("clamps a future first-use date to today", () => {
+    const d = makeDeps({ today: "2026-11-12" });
+    d.store.settings.firstUsedOn = "2027-05-01";
+    expect(getReminderStart(d)).toBe("2026-11-12");
   });
 });

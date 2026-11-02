@@ -1,11 +1,25 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import Database from "better-sqlite3";
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { expensesToCsv, incomesToCsv } from "@/domain/csv";
 import type { Expense, Income } from "@/domain/types";
+import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import { backupDatabase, exportCsv, restoreDatabase, validateBackup } from "./backup";
+import { openDatabase } from "./client";
+import { migrationsDirectory } from "./config";
+import { seedDatabase } from "./seed";
 import { closeDatabase, DatabaseBusyError, getDb, getRepositories, withDatabase } from "./holder";
 import { createRepositories } from "./repositories";
 import { drizzle } from "drizzle-orm/better-sqlite3";
@@ -215,4 +229,112 @@ it("keeps the live connection and rows intact if the automatic safety backup can
   expect(before.$client.open).toBe(true);
   expect(getRepositories().expenses.get(value.id)?.amountMinor).toBe(777);
   expect(readdirSync(directory).some((name) => name.startsWith(".ifm-"))).toBe(false);
+});
+
+/** Build a database file as an OLDER app version would have: only the first `count` migrations applied. */
+function oldVersionBackup(file: string, count: number, withData: boolean): void {
+  const folder = mkdtempSync(join(tmpdir(), "ifm-old-migrations-"));
+  try {
+    mkdirSync(join(folder, "meta"));
+    const real = migrationsDirectory();
+    const journal = JSON.parse(readFileSync(join(real, "meta/_journal.json"), "utf8"));
+    journal.entries = journal.entries.slice(0, count);
+    writeFileSync(join(folder, "meta/_journal.json"), JSON.stringify(journal));
+    for (const entry of journal.entries)
+      copyFileSync(join(real, `${entry.tag}.sql`), join(folder, `${entry.tag}.sql`));
+    const old = openDatabase(file);
+    try {
+      migrate(old.db, { migrationsFolder: folder });
+      seedDatabase(old.db, "UTC", new Date("2026-11-20T00:00:00Z"));
+      if (withData) {
+        const r = createRepositories(old.db);
+        const category = r.categories.list()[0]!;
+        r.expenses.insert({
+          id: "old-expense",
+          date: "2026-08-15",
+          amountMinor: 500,
+          currency: "USD",
+          fxRateToBase: null,
+          categoryId: category.id,
+          paymentMethodId: r.paymentMethods.list()[0]!.id,
+          bottleId: category.defaultBottleId,
+          note: null,
+          source: "manual",
+          subscriptionId: null,
+          billingMonth: null,
+          createdAt: "2026-08-15T00:00:00.000Z",
+          updatedAt: "2026-08-15T00:00:00.000Z",
+        });
+      }
+    } finally {
+      old.sqlite.close();
+    }
+  } finally {
+    rmSync(folder, { recursive: true, force: true });
+  }
+}
+
+describe("restoring older-version backups", () => {
+  it("migrates a strict-prefix backup forward on the staged copy and backfills first use from its data", async () => {
+    getRepositories(); // live DB at the current version
+    const oldFile = join(directory, "old.db");
+    oldVersionBackup(oldFile, 2, true);
+    expect(() => validateBackup(oldFile)).toThrow(); // not valid as a current-version backup
+    const result = await restoreDatabase(oldFile);
+    expect(getRepositories().expenses.get("old-expense")?.amountMinor).toBe(500);
+    expect(getRepositories().settings.get().firstUsedOn).toBe("2026-08-15");
+    validateBackup(path); // the live file is now fully current
+    validateBackup(result.safetyBackupPath);
+    // The source backup itself is untouched (still old).
+    const source = new Database(oldFile, { readonly: true });
+    expect(source.prepare("SELECT COUNT(*) AS n FROM __drizzle_migrations").get()).toEqual({ n: 2 });
+    source.close();
+  });
+
+  it("an old backup with no activity gets its seed-time first-use date", async () => {
+    getRepositories();
+    const oldFile = join(directory, "old-empty.db");
+    oldVersionBackup(oldFile, 2, false);
+    await restoreDatabase(oldFile);
+    expect(getRepositories().settings.get().firstUsedOn).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it("rejects newer, diverged and truncated-history backups and leaves the live DB alone", async () => {
+    const value = expense();
+    getRepositories().expenses.insert(value);
+    const live = getDb();
+    const newer = await backupDatabase(join(directory, "newer.db"));
+    const n = new Database(newer);
+    n.exec("INSERT INTO __drizzle_migrations (hash, created_at) VALUES ('future', 9999999999999)");
+    n.close();
+    await expect(restoreDatabase(newer)).rejects.toThrow("history");
+    const diverged = join(directory, "diverged.db");
+    oldVersionBackup(diverged, 2, false);
+    const d = new Database(diverged);
+    d.exec("UPDATE __drizzle_migrations SET hash = 'tampered' WHERE rowid = 1");
+    d.close();
+    await expect(restoreDatabase(diverged)).rejects.toThrow("history");
+    const empty = join(directory, "no-history.db");
+    oldVersionBackup(empty, 2, false);
+    const e = new Database(empty);
+    e.exec("DELETE FROM __drizzle_migrations");
+    e.close();
+    await expect(restoreDatabase(empty)).rejects.toThrow();
+    expect(getDb()).toBe(live);
+    expect(getRepositories().expenses.get(value.id)).toEqual(value);
+  });
+
+  it("a tampered old backup (extra table) fails strict validation after upgrade, live DB untouched", async () => {
+    const value = expense();
+    getRepositories().expenses.insert(value);
+    const live = getDb();
+    const tampered = join(directory, "tampered.db");
+    oldVersionBackup(tampered, 2, false);
+    const t = new Database(tampered);
+    t.exec("CREATE TABLE unexpected (id TEXT)");
+    t.close();
+    await expect(restoreDatabase(tampered)).rejects.toThrow("schema");
+    expect(getDb()).toBe(live);
+    expect(getRepositories().expenses.get(value.id)).toEqual(value);
+  });
 });

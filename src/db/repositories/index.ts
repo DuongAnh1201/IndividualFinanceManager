@@ -3,6 +3,7 @@ import type * as D from "@/domain/types";
 import type { openDatabase } from "../client";
 import * as s from "../schema";
 import * as m from "./mapping";
+import { initializeFirstUse } from "../first-use";
 
 type Db = ReturnType<typeof openDatabase>["db"];
 export interface DateRange {
@@ -436,9 +437,12 @@ export function createRepositories(db: Db) {
     get(): D.Settings {
       const row = db.select().from(s.settings).where(eq(s.settings.id, 1)).get();
       if (!row) throw new Error("Settings missing; run db:seed first");
+      if (row.first_used_on === null)
+        throw new Error("Settings first use is not initialized; run db:seed first");
       if (!Number.isInteger(row.week_starts_on) || row.week_starts_on < 0 || row.week_starts_on > 6)
         throw new Error("Invalid week start");
       return {
+        firstUsedOn: row.first_used_on,
         baseCurrency: row.base_currency,
         payDays: row.pay_days,
         weekStartsOn: row.week_starts_on as D.WeekStart,
@@ -456,10 +460,13 @@ export function createRepositories(db: Db) {
         week_starts_on: value.weekStartsOn,
         timezone: value.timezone,
       };
-      db.insert(s.settings)
-        .values({ id: 1, ...row })
-        .onConflictDoUpdate({ target: s.settings.id, set: row })
-        .run();
+      transaction(() => {
+        db.insert(s.settings)
+          .values({ id: 1, ...row })
+          .onConflictDoUpdate({ target: s.settings.id, set: row })
+          .run();
+        initializeFirstUse(db);
+      });
       return settings.get()!;
     },
   };

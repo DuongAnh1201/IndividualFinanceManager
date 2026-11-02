@@ -15,6 +15,7 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { expensesToCsv, incomesToCsv } from "@/domain/csv";
 import { openDatabase } from "./client";
 import { databasePath, migrationsDirectory } from "./config";
+import { initializeFirstUse } from "./first-use";
 import { replaceHeldDatabase, withDatabase, withExclusiveDatabase, type DatabaseConnection } from "./holder";
 
 const uniqueName = (kind: string) =>
@@ -64,12 +65,15 @@ export function validateBackup(path: string): void {
     if (JSON.stringify(schemaObjects(source)) !== JSON.stringify(schemaObjects(reference.sqlite)))
       throw new Error("Backup schema does not match this app version");
     const history = (db: Database.Database) =>
-      db.prepare("SELECT hash, created_at FROM __drizzle_migrations ORDER BY id").all();
+      db.prepare("SELECT hash, created_at FROM __drizzle_migrations ORDER BY created_at").all();
     if (JSON.stringify(history(source)) !== JSON.stringify(history(reference.sqlite)))
       throw new Error("Backup migration history does not match this app version");
-    const settings = source.prepare("SELECT pay_days, timezone FROM settings WHERE id = 1").get() as
-      { pay_days: string; timezone: string } | undefined;
+    const settings = source
+      .prepare("SELECT pay_days, timezone, first_used_on FROM settings WHERE id = 1")
+      .get() as { pay_days: string; timezone: string; first_used_on: string | null } | undefined;
     if (!settings) throw new Error("Backup is missing settings");
+    if (settings.first_used_on === null || !/^\d{4}-\d{2}-\d{2}$/.test(settings.first_used_on))
+      throw new Error("Backup has no valid first-use date");
     const days: unknown = JSON.parse(settings.pay_days);
     if (
       !Array.isArray(days) ||
@@ -81,6 +85,71 @@ export function validateBackup(path: string): void {
   } finally {
     source.close();
     reference.sqlite.close();
+  }
+}
+type MigrationRow = { hash: string; created_at: number };
+const migrationHistory = (db: Database.Database): MigrationRow[] =>
+  db.prepare("SELECT hash, created_at FROM __drizzle_migrations ORDER BY created_at").all() as MigrationRow[];
+
+/**
+ * Restore-time check: integrity and foreign keys, and how the backup's migration history
+ * relates to this app's. "current" = identical; "older" = a STRICT PREFIX of the shipped
+ * history (safe to migrate forward). Anything else — newer app, diverged or unknown
+ * history — is rejected.
+ */
+export function inspectBackup(path: string): "current" | "older" {
+  const source = new Database(path, { readonly: true, fileMustExist: true });
+  const reference = openDatabase(":memory:");
+  try {
+    const integrity = source.pragma("integrity_check") as { integrity_check: string }[];
+    if (integrity.length !== 1 || integrity[0]?.integrity_check !== "ok")
+      throw new Error("Backup failed SQLite integrity validation");
+    if ((source.pragma("foreign_key_check") as unknown[]).length)
+      throw new Error("Backup has invalid foreign keys");
+    migrate(reference.db, { migrationsFolder: migrationsDirectory() });
+    let theirs: MigrationRow[];
+    try {
+      theirs = migrationHistory(source);
+    } catch {
+      throw new Error("Backup schema does not match this app version"); // not an app database at all
+    }
+    const ours = migrationHistory(reference.sqlite);
+    const same = (a: MigrationRow[], b: MigrationRow[]) => JSON.stringify(a) === JSON.stringify(b);
+    if (same(theirs, ours)) return "current";
+    if (theirs.length > 0 && theirs.length < ours.length && same(theirs, ours.slice(0, theirs.length)))
+      return "older";
+    throw new Error("Backup migration history does not match this app version");
+  } finally {
+    source.close();
+    reference.sqlite.close();
+  }
+}
+
+/**
+ * Bring a STAGED copy (never the live file) up to the shipped schema and initialise
+ * settings.first_used_on (earliest recorded activity for pre-existing data). The caller
+ * re-validates the result strictly before it can replace anything.
+ */
+function upgradeStagedBackup(staged: string): void {
+  const connection = openDatabase(staged);
+  try {
+    migrate(connection.db, { migrationsFolder: migrationsDirectory() });
+    initializeFirstUse(connection.db);
+  } finally {
+    connection.sqlite.close();
+  }
+}
+
+function stagedNeedsFirstUse(path: string): boolean {
+  const db = new Database(path, { readonly: true, fileMustExist: true });
+  try {
+    const row = db.prepare("SELECT first_used_on FROM settings WHERE id = 1").get() as
+      { first_used_on: string | null } | undefined;
+    return row !== undefined && row.first_used_on === null;
+  } catch {
+    return false;
+  } finally {
+    db.close();
   }
 }
 async function copyBackup(connection: DatabaseConnection, destination: string): Promise<string> {
@@ -118,7 +187,7 @@ export async function restoreDatabase(sourcePath: string): Promise<RestoreResult
     const target = resolve(connection.sqlite.name);
     if (realpathSync(sourcePath) === realpathSync(target))
       throw new Error("Choose a backup other than the live database");
-    validateBackup(sourcePath);
+    inspectBackup(sourcePath); // current or strictly older; also integrity + FK checks
     const directory = mkdtempSync(join(dirname(target), ".ifm-restore-"));
     const staged = join(directory, "restored.db");
     try {
@@ -130,6 +199,9 @@ export async function restoreDatabase(sourcePath: string): Promise<RestoreResult
         source.close();
       }
       chmodSync(staged, 0o600);
+      // Older backups are migrated forward on the staged copy; strict validation then
+      // proves the result matches the shipped schema before the live DB is touched.
+      if (inspectBackup(staged) === "older" || stagedNeedsFirstUse(staged)) upgradeStagedBackup(staged);
       validateBackup(staged);
       const safetyBackupPath = await copyBackup(
         connection,

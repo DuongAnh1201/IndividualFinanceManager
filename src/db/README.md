@@ -149,3 +149,16 @@ are private. Existing backup files/export directories are never overwritten.
 Within the checkout, output is restricted to git-ignored `data/`, including after
 resolving symlinked ancestors. An explicit path outside the checkout is supported.
 Tests use temporary directories and never read or modify Tom's finance database.
+
+## First use and restoring older backups
+
+`settings.first_used_on` (`Settings.firstUsedOn`) is the local date (in the saved timezone) of
+first use. It is set once by `initializeFirstUse` after migrations/seed and never changed
+(`settings.update` ignores any incoming value). Existing installs are backfilled with their
+earliest recorded income/expense/reminder date. Pay-day reminders start counting from it.
+
+`restoreDatabase` accepts a backup whose migration history is identical to this app's
+(`current`) or a **strict prefix** of it (`older`). An older backup is migrated forward on the
+_staged copy_ (the source file and the live DB are never touched), `first_used_on` is
+initialised, and the result must then pass the strict `validateBackup` before a safety backup is
+taken and the live DB is replaced. Newer, diverged or history-less backups are rejected.

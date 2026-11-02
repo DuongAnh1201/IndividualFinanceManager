@@ -1,4 +1,4 @@
-import { clampDay, formatDate, monthOf, parseDate } from "../domain/period";
+import { clampDay, parseDate } from "../domain/period";
 import { dismissReminder as dismiss, pendingReminders } from "../domain/reminders";
 import type { IsoDate, Reminder } from "../domain/types";
 import { fail, ok, type FieldError, type Result } from "./result";
@@ -28,22 +28,15 @@ export function dismissReminder(
 }
 
 /**
- * Where missed pay-day slots start counting: the earliest income / expense / stored
- * reminder date, or the first day of the current month on an empty database (so a fresh
- * install never shows invented overdue slots). Missed slots then stay pending until resolved.
+ * Where missed pay-day slots start counting: `Settings.firstUsedOn` (set once at first
+ * use), so a fresh install shows no invented overdue slots while genuinely missed pay
+ * days stay pending until resolved. Never later than `today`.
  */
 export function getReminderStart(deps: ServiceDeps, today?: IsoDate): IsoDate {
   const { repos, clock } = deps;
   const t = today ?? clock.today();
-  const dates = [
-    ...repos.incomes.list().map((i) => i.date),
-    ...repos.expenses.list().map((e) => e.date),
-    ...repos.reminders.list().map((r) => r.slot),
-  ];
-  const earliest = dates.reduce<IsoDate | null>((a, d) => (a === null || d < a ? d : a), null);
-  if (earliest !== null && earliest < t) return earliest;
-  const { year, month } = parseDate(`${monthOf(t)}-01`);
-  return formatDate(year, month, 1);
+  const first = repos.settings.get().firstUsedOn;
+  return first < t ? first : t;
 }
 
 /** Due, unresolved pay-day slots (missed ones included). `since` defaults to `getReminderStart`. */

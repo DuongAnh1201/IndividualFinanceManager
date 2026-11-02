@@ -1,0 +1,1 @@
+ALTER TABLE `settings` ADD `first_used_on` text;
