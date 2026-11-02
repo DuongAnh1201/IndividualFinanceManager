@@ -35,6 +35,7 @@ describe("database migration and seed", () => {
         week_starts_on: 1,
         timezone: "Asia/Ho_Chi_Minh",
         first_used_on: "2026-11-12", // 20:00Z is still Nov 12 in Los Angeles (seed zone)
+        limit_warning_percent: 80,
       },
     ]);
     expect(db.select().from(s.bottle).all()).toHaveLength(6);

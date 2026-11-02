@@ -75,6 +75,7 @@ export function updateSettings(deps: ServiceDeps, input: SettingsInput): Result<
       payDays: [...new Set(input.payDays)].sort((a, b) => a - b),
       weekStartsOn: input.weekStartsOn as WeekStart,
       timezone: input.timezone,
+      limitWarningPercent: before.limitWarningPercent,
     };
     repos.settings.update(settings);
     if (before.baseCurrency !== settings.baseCurrency || before.weekStartsOn !== settings.weekStartsOn) {

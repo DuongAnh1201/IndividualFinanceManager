@@ -20,11 +20,13 @@ export const settings = sqliteTable(
     week_starts_on: integer("week_starts_on").notNull().default(1),
     timezone: text("timezone").notNull(),
     first_used_on: text("first_used_on"),
+    limit_warning_percent: integer("limit_warning_percent").notNull().default(80),
   },
   (t) => [
     check("settings_currency", sql`${t.base_currency} IN ('USD','VND')`),
     check("settings_singleton", sql`${t.id} = 1`),
     check("settings_week_start", sql`${t.week_starts_on} BETWEEN 0 AND 6`),
+    check("settings_limit_warning_percent", sql`${t.limit_warning_percent} BETWEEN 50 AND 99`),
   ],
 );
 export const paymentMethod = sqliteTable(

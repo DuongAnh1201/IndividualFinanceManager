@@ -447,6 +447,7 @@ export function createRepositories(db: Db) {
         payDays: row.pay_days,
         weekStartsOn: row.week_starts_on as D.WeekStart,
         timezone: row.timezone,
+        limitWarningPercent: row.limit_warning_percent,
       };
     },
     update(value: D.Settings): D.Settings {
@@ -454,11 +455,18 @@ export function createRepositories(db: Db) {
         throw new Error("Invalid pay days");
       // Validate IANA timezone before storing it.
       new Intl.DateTimeFormat("en", { timeZone: value.timezone });
+      if (
+        !Number.isInteger(value.limitWarningPercent) ||
+        value.limitWarningPercent < 50 ||
+        value.limitWarningPercent > 99
+      )
+        throw new Error("Limit warning percent must be an integer from 50 to 99");
       const row = {
         base_currency: value.baseCurrency,
         pay_days: value.payDays,
         week_starts_on: value.weekStartsOn,
         timezone: value.timezone,
+        limit_warning_percent: value.limitWarningPercent,
       };
       transaction(() => {
         db.insert(s.settings)
