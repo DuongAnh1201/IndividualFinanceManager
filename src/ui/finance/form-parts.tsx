@@ -1,5 +1,5 @@
 "use client";
-import type { ReactNode } from "react";
+import { useState, type ChangeEvent, type ReactNode } from "react";
 import { currencyExponent } from "@/domain/money";
 import type { CurrencyCode } from "@/domain/types";
 import type { FormState } from "./types";
@@ -55,4 +55,16 @@ export function FormError({ state }: { state: FormState }) {
       <p>{state.error}</p>
     </div>
   ) : null;
+}
+
+/** Controlled fields keep typed values when a server action returns validation errors. */
+export function useFormFields(initial: Record<string, string>) {
+  const [values, setValues] = useState(initial);
+  return (name: string) => ({
+    value: values[name] ?? "",
+    onChange: (event: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+      const value = event.target.value;
+      setValues((previous) => ({ ...previous, [name]: value }));
+    },
+  });
 }

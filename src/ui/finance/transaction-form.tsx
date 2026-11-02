@@ -3,7 +3,7 @@ import { useActionState, useState } from "react";
 import Link from "next/link";
 import { currencyExponent } from "@/domain/money";
 import type { CurrencyCode, Expense, Income } from "@/domain/types";
-import { amountInputValue, Field, fieldA11y, FormError } from "./form-parts";
+import { amountInputValue, Field, fieldA11y, FormError, useFormFields } from "./form-parts";
 import type { FormAction, FormOptions } from "./types";
 
 export function TransactionForm({
@@ -24,6 +24,16 @@ export function TransactionForm({
   const expense = existing && "categoryId" in existing ? existing : undefined;
   const income = existing && "bottleRuleVersionId" in existing ? existing : undefined;
   const slot = payDaySlot ?? income?.payDaySlot ?? "";
+  const bind = useFormFields({
+    amount: existing ? amountInputValue(existing.amountMinor, existing.currency) : "",
+    date: existing?.date ?? options.today,
+    source: income?.source ?? "",
+    categoryId: expense?.categoryId ?? "",
+    paymentMethodId: expense?.paymentMethodId ?? "",
+    bottleId: expense?.bottleId ?? "",
+    fxRateToBase: String(existing?.fxRateToBase ?? ""),
+    note: existing?.note ?? "",
+  });
   return (
     <form action={formAction} className="card entry-form">
       <input type="hidden" name="kind" value={kind} />
@@ -56,7 +66,7 @@ export function TransactionForm({
             inputMode={currency === "VND" ? "numeric" : "decimal"}
             required
             autoFocus
-            defaultValue={existing ? amountInputValue(existing.amountMinor, existing.currency) : ""}
+            {...bind("amount")}
             placeholder={currency === "VND" ? "50000" : "0.00"}
             {...fieldA11y("amount", state, true)}
           />
@@ -74,14 +84,7 @@ export function TransactionForm({
           </select>
         </Field>
         <Field name="date" label="Date" state={state}>
-          <input
-            id="date"
-            name="date"
-            type="date"
-            required
-            defaultValue={existing?.date ?? options.today}
-            {...fieldA11y("date", state)}
-          />
+          <input id="date" name="date" type="date" required {...bind("date")} {...fieldA11y("date", state)} />
         </Field>
         {kind === "income" ? (
           <Field name="source" label="Income source" state={state}>
@@ -90,7 +93,7 @@ export function TransactionForm({
               name="source"
               required
               maxLength={200}
-              defaultValue={income?.source ?? ""}
+              {...bind("source")}
               placeholder="Salary, freelance work…"
               {...fieldA11y("source", state)}
             />
@@ -102,7 +105,7 @@ export function TransactionForm({
                 id="categoryId"
                 name="categoryId"
                 required
-                defaultValue={expense?.categoryId ?? ""}
+                {...bind("categoryId")}
                 {...fieldA11y("categoryId", state)}
               >
                 <option value="" disabled>
@@ -123,7 +126,7 @@ export function TransactionForm({
                 id="paymentMethodId"
                 name="paymentMethodId"
                 required
-                defaultValue={expense?.paymentMethodId ?? ""}
+                {...bind("paymentMethodId")}
                 {...fieldA11y("paymentMethodId", state)}
               >
                 <option value="" disabled>
@@ -148,7 +151,7 @@ export function TransactionForm({
               <select
                 id="bottleId"
                 name="bottleId"
-                defaultValue={expense?.bottleId ?? ""}
+                {...bind("bottleId")}
                 {...fieldA11y("bottleId", state, true)}
               >
                 <option value="">Category default</option>
@@ -175,7 +178,7 @@ export function TransactionForm({
               id="fxRateToBase"
               name="fxRateToBase"
               inputMode="decimal"
-              defaultValue={existing?.fxRateToBase ?? ""}
+              {...bind("fxRateToBase")}
               placeholder="e.g. 0.00004"
               {...fieldA11y("fxRateToBase", state, true)}
             />
@@ -188,7 +191,7 @@ export function TransactionForm({
           name="note"
           rows={3}
           maxLength={2000}
-          defaultValue={existing?.note ?? ""}
+          {...bind("note")}
           placeholder="Anything you’d like to remember"
           {...fieldA11y("note", state)}
         />

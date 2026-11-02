@@ -79,7 +79,7 @@ export default async function Transactions({
     updated: "Changes saved.",
     deleted: "Transaction deleted.",
   };
-  const message = messages[text("saved")];
+  const message = Object.hasOwn(messages, text("saved")) ? messages[text("saved")] : undefined;
   return (
     <>
       <div className="page-heading">

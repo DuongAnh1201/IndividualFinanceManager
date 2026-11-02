@@ -7,14 +7,14 @@ import { seedDatabase } from "@/db/seed";
 import type { ServiceDeps } from "@/services/ports";
 import type { FormOptions } from "@/ui/finance/types";
 
+type FinanceContext = ServiceDeps & { repos: ReturnType<typeof createRepositories> };
+
 /** One owned connection per request/action; local defaults only, never sample history. */
-export function withFinance<T>(
-  work: (deps: ServiceDeps & { repos: ReturnType<typeof createRepositories> }) => T,
-): T {
+export function withFinance<T>(work: (deps: FinanceContext) => T): T {
   const { db, sqlite } = openDatabase();
   try {
     migrate(db, { migrationsFolder: join(process.cwd(), "src/db/migrations") });
-    seedDatabase(db);
+    seedDatabase(db, Intl.DateTimeFormat().resolvedOptions().timeZone);
     const repos = createRepositories(db);
     const timezone = repos.settings.get().timezone;
     const clock = {
@@ -36,7 +36,7 @@ export function withFinance<T>(
     sqlite.close();
   }
 }
-export function formOptions({ repos, clock }: Parameters<Parameters<typeof withFinance>[0]>[0]): FormOptions {
+export function formOptions({ repos, clock }: FinanceContext): FormOptions {
   return {
     categories: repos.categories.list(),
     paymentMethods: repos.paymentMethods.list(),

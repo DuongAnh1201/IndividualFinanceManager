@@ -2,7 +2,7 @@
 import { useActionState, useState } from "react";
 import Link from "next/link";
 import type { CurrencyCode, Subscription } from "@/domain/types";
-import { amountInputValue, Field, fieldA11y, FormError } from "./form-parts";
+import { amountInputValue, Field, fieldA11y, FormError, useFormFields } from "./form-parts";
 import type { FormAction, FormOptions } from "./types";
 export function SubscriptionForm({
   action,
@@ -15,6 +15,17 @@ export function SubscriptionForm({
 }) {
   const [state, formAction, pending] = useActionState(action, {});
   const [currency, setCurrency] = useState<CurrencyCode>(existing?.currency ?? options.baseCurrency);
+  const bind = useFormFields({
+    name: existing?.name ?? "",
+    amount: existing ? amountInputValue(existing.amountMinor, existing.currency) : "",
+    billingDay: String(existing?.billingDay ?? 1),
+    startDate: existing?.startDate ?? options.today,
+    categoryId:
+      existing?.categoryId ??
+      options.categories.find((c) => !c.archivedAt && c.kind === "subscription")?.id ??
+      "",
+    paymentMethodId: existing?.paymentMethodId ?? "",
+  });
   return (
     <form className="card entry-form" action={formAction}>
       {existing && <input type="hidden" name="id" value={existing.id} />}
@@ -27,7 +38,7 @@ export function SubscriptionForm({
             required
             maxLength={200}
             autoFocus
-            defaultValue={existing?.name ?? ""}
+            {...bind("name")}
             placeholder="Music, internet, a favorite app…"
             {...fieldA11y("name", state)}
           />
@@ -43,7 +54,7 @@ export function SubscriptionForm({
             name="amount"
             required
             inputMode={currency === "VND" ? "numeric" : "decimal"}
-            defaultValue={existing ? amountInputValue(existing.amountMinor, existing.currency) : ""}
+            {...bind("amount")}
             {...fieldA11y("amount", state, true)}
           />
         </Field>
@@ -72,7 +83,7 @@ export function SubscriptionForm({
             max="31"
             step="1"
             required
-            defaultValue={existing?.billingDay ?? 1}
+            {...bind("billingDay")}
             {...fieldA11y("billingDay", state, true)}
           />
         </Field>
@@ -82,7 +93,7 @@ export function SubscriptionForm({
             name="startDate"
             type="date"
             required
-            defaultValue={existing?.startDate ?? options.today}
+            {...bind("startDate")}
             {...fieldA11y("startDate", state)}
           />
         </Field>
@@ -91,11 +102,7 @@ export function SubscriptionForm({
             id="categoryId"
             name="categoryId"
             required
-            defaultValue={
-              existing?.categoryId ??
-              options.categories.find((c) => !c.archivedAt && c.kind === "subscription")?.id ??
-              ""
-            }
+            {...bind("categoryId")}
             {...fieldA11y("categoryId", state)}
           >
             <option value="" disabled>
@@ -116,7 +123,7 @@ export function SubscriptionForm({
             id="paymentMethodId"
             name="paymentMethodId"
             required
-            defaultValue={existing?.paymentMethodId ?? ""}
+            {...bind("paymentMethodId")}
             {...fieldA11y("paymentMethodId", state)}
           >
             <option value="" disabled>
