@@ -11,15 +11,18 @@ import type { UpcomingSubscription } from "@/services/reports";
 import { money, shortDate } from "@/ui/format";
 import { Mochi, Penny, bottleMascots } from "@/ui/mascots";
 import { barPercent, moodFor, percentLabel, shares, statusMessage } from "./model";
+import { AllowanceLine, type AllowanceView } from "@/ui/allowance-line";
 
 export function LivingLimitCard({
   status,
   currency,
   incompleteCount,
+  allowance,
 }: {
   status: LivingLimitStatus | null;
   currency: CurrencyCode;
   incompleteCount: number;
+  allowance?: AllowanceView | null;
 }) {
   const message = statusMessage(status);
   return (
@@ -50,6 +53,7 @@ export function LivingLimitCard({
             <span className="money">{money(status.limitMinor, currency)}</span> ·{" "}
             <span data-testid="limit-percent">{percentLabel(status.ratio)}</span> used
           </p>
+          <AllowanceLine allowance={allowance ?? null} currency={currency} />
         </>
       ) : (
         <Link href="/settings" className="text-link">
