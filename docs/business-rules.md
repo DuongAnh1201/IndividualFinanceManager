@@ -39,7 +39,9 @@ Owners: **claude2** (BR-1, BR-3, BR-4, BR-5) · **claude3** (BR-2, BR-6, BR-7, B
 ## BR-6 Living limit (claude3)
 - One limit per month, base currency.
 - Only categories with `counts_toward_living_limit = true` count (Tuition does not).
-- Status: `ok` < 80 % ≤ `warning` < 100 % ≤ `over`.
+- Status: `ok` < W ≤ `warning` < 100 % ≤ `over`, where W = `settings.limitWarningPercent` (integer 50–99, default 80). Integer math only.
+- **Crossing** (`limitCrossing(before, after)`): compares the month's status before and after a write. Returns `over` if it moved into `over`, `warning` if it moved from `ok` into `warning`, else `null` (no alert when going down, staying level, or across months).
+- **Remaining allowance** (`remainingAllowance(status, today)`): `leftMinor = limit − spent` (negative when over). For the current month only: `daysLeft` = days from today through the month's last day inclusive; `perDayMinor = floor(leftMinor / daysLeft)` when `leftMinor > 0`, else 0. For a past/future month `daysLeft` and `perDayMinor` are `null`.
 - Suggested limit = that month's Necessities allocations (user can override). Carries forward from last month if not set.
 
 ## BR-7 Reports & comparison (claude3)
