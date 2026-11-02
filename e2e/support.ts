@@ -33,9 +33,6 @@ export function trackErrors(page: Page): string[] {
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(`pageerror: ${e.message}`));
   page.on("console", (m) => {
-    // KNOWN ISSUE: the app ships no favicon, so every page logs a 404 for /favicon.ico (reported to codex1).
-    // Skipped so tests guard everything else; remove this line once an icon is added.
-    if (m.location().url.endsWith("/favicon.ico")) return;
     if (m.type() === "error") errors.push(`console: ${m.text()}`);
   });
   return errors;
@@ -166,6 +163,16 @@ export function readDb(): { all<T>(sql: string, ...params: unknown[]): T[]; clos
     all: <T>(sql: string, ...params: unknown[]) => sqlite.prepare(sql).all(...params) as T[],
     close: () => sqlite.close(),
   };
+}
+
+/** Test-only write to the throw-away DB (e.g. to backdate settings the app never changes). */
+export function writeDb(sql: string, ...params: unknown[]): void {
+  const sqlite = new Database(inject("databaseUrl"));
+  try {
+    sqlite.prepare(sql).run(...params);
+  } finally {
+    sqlite.close();
+  }
 }
 
 /** Runs `fn` with a fresh read-only DB handle. */

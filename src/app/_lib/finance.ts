@@ -1,21 +1,14 @@
 import { randomUUID } from "node:crypto";
-import { join } from "node:path";
-import { migrate } from "drizzle-orm/better-sqlite3/migrator";
-import { openDatabase } from "@/db/client";
-import { createRepositories } from "@/db/repositories";
-import { seedDatabase } from "@/db/seed";
+import { withDatabase } from "@/db/holder";
+import type { createRepositories } from "@/db/repositories";
 import type { ServiceDeps } from "@/services/ports";
 import type { FormOptions } from "@/ui/finance/types";
 
 type FinanceContext = ServiceDeps & { repos: ReturnType<typeof createRepositories> };
 
-/** One owned connection per request/action; local defaults only, never sample history. */
+/** Obtain fresh repositories inside the holder gate; restore can replace its connection. */
 export function withFinance<T>(work: (deps: FinanceContext) => T): T {
-  const { db, sqlite } = openDatabase();
-  try {
-    migrate(db, { migrationsFolder: join(process.cwd(), "src/db/migrations") });
-    seedDatabase(db, Intl.DateTimeFormat().resolvedOptions().timeZone);
-    const repos = createRepositories(db);
+  return withDatabase((repos) => {
     const timezone = repos.settings.get().timezone;
     const clock = {
       now: () => new Date().toISOString(),
@@ -32,9 +25,7 @@ export function withFinance<T>(work: (deps: FinanceContext) => T): T {
       },
     };
     return work({ repos, clock });
-  } finally {
-    sqlite.close();
-  }
+  });
 }
 export function formOptions({ repos, clock }: FinanceContext): FormOptions {
   return {

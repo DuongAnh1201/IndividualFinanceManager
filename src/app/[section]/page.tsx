@@ -3,20 +3,10 @@ import { notFound } from "next/navigation";
 import { EmptyState } from "@/ui/empty-state";
 
 const sections: Record<string, { title: string; description: string }> = {
-  bottles: {
-    title: "Income & Bottles",
-    description:
-      "Your income, allocations and bottle balances will appear here. No balances have been calculated yet.",
-  },
   reports: {
     title: "Reports",
     description:
       "Week, month and year comparisons will help you see where your money goes. Reports need financial data and are coming in a later phase.",
-  },
-  settings: {
-    title: "Settings",
-    description:
-      "Bottle ratios, categories, currencies, pay days and backups will be managed here. Settings controls are coming in a later phase.",
   },
 };
 export function generateStaticParams() {
