@@ -114,7 +114,16 @@ export function fakeRepos(store: Store): Repositories {
         s.expenses.push(e);
       },
       insertMany(es) {
-        for (const e of es) this.insert(e);
+        const keyOf = (e: Expense) =>
+          e.subscriptionId && e.billingMonth ? `${e.subscriptionId}|${e.billingMonth}` : null;
+        const inserted: Expense[] = [];
+        for (const e of es) {
+          const key = keyOf(e);
+          if (key && s.expenses.some((x) => keyOf(x) === key)) continue; // ON CONFLICT DO NOTHING
+          s.expenses.push(e);
+          inserted.push(e);
+        }
+        return inserted;
       },
       update: (e) => void (s.expenses[must(s.expenses, (x) => x.id === e.id, "expense")] = e),
       delete: (id) =>

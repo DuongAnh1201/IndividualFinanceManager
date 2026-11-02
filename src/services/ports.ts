@@ -36,7 +36,11 @@ export interface Repositories {
     get(id: Id): Expense | undefined;
     update(expense: Expense): void;
     delete(id: Id): void;
-    insertMany(expenses: Expense[]): void;
+    /**
+     * Idempotent for subscription charges: ON CONFLICT(subscription_id, billing_month) DO NOTHING
+     * (BR-1 race safety). Returns only the rows actually inserted; other constraint errors throw.
+     */
+    insertMany(expenses: Expense[]): Expense[];
     /** `subscriptionId|billingMonth` keys of posted subscription charges (see chargeKey). */
     postedChargeKeys(): Set<string>;
   };

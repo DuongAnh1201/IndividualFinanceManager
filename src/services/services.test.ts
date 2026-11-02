@@ -176,6 +176,19 @@ describe("subscriptions", () => {
     expect(d.store.expenses).toHaveLength(2);
   });
 
+  it("autopost race: a charge already inserted by someone else is skipped, not an error", () => {
+    const d = makeDeps();
+    unwrap(createSubscription(d, subInput));
+    const real = d.repos.expenses.postedChargeKeys;
+    d.repos.expenses.postedChargeKeys = () => new Set(); // stale read: another run posted meanwhile
+    const first = runSubscriptionAutopost(d, "2026-10-20");
+    expect(first).toHaveLength(2);
+    const again = runSubscriptionAutopost(d, "2026-10-20");
+    expect(again).toEqual([]);
+    expect(d.store.expenses).toHaveLength(2);
+    d.repos.expenses.postedChargeKeys = real;
+  });
+
   it("price change affects only later charges; update/end validate", () => {
     const d = makeDeps();
     const sub = unwrap(createSubscription(d, subInput));

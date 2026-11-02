@@ -22,8 +22,7 @@ export function runSubscriptionAutopost(deps: ServiceDeps, today?: IsoDate): Exp
       now: clock.now(),
       newId: clock.newId,
     });
-    if (posted.length > 0) repos.expenses.insertMany(posted);
-    return posted;
+    return posted.length > 0 ? repos.expenses.insertMany(posted) : [];
   });
 }
 
