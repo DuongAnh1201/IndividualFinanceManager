@@ -1,62 +1,86 @@
+import type { Metadata } from "next";
 import Link from "next/link";
-import { Penny, bottleMascots } from "@/ui/mascots";
+import { getDashboard, getMonthlyReport } from "@/services/reports";
+import { monthTitle } from "@/ui/format";
+import { Penny } from "@/ui/mascots";
+import {
+  BottleBalances,
+  CategoryBars,
+  LivingLimitCard,
+  PayDayBanner,
+  SpendCard,
+  UpcomingCharges,
+} from "@/ui/dashboard/sections";
+import { withFinance } from "./_lib/finance";
+import { dismissPayDay } from "./dashboard-actions";
+export const dynamic = "force-dynamic";
+export const metadata: Metadata = { title: "Dashboard" };
 
-export default function Home() {
+export default async function Dashboard({ searchParams }: { searchParams: Promise<{ payday?: string }> }) {
+  const { payday } = await searchParams;
+  const view = withFinance((deps) => {
+    const dashboard = getDashboard(deps);
+    return {
+      dashboard,
+      report: getMonthlyReport(deps, dashboard.month),
+      currency: deps.repos.settings.get().baseCurrency,
+      categories: deps.repos.categories.list(),
+      bottles: deps.repos.bottles.list(),
+      hasActivity: deps.repos.expenses.list().length + deps.repos.incomes.list().length > 0,
+    };
+  });
+  const { dashboard, report, currency } = view;
   return (
     <>
       <div className="page-heading">
         <div>
-          <p className="eyebrow">Your everyday money companion</p>
-          <h1>A cozy place to begin.</h1>
+          <p className="eyebrow">{monthTitle(dashboard.month)}</p>
+          <h1>Your cozy overview</h1>
           <p>A little clarity for today. A little room for tomorrow.</p>
         </div>
-        <span className="pill">Getting started</span>
-      </div>
-      <section className="card welcome">
-        <div>
-          <p className="eyebrow">Hello from Penny</p>
-          <h2>
-            Let’s give your money
-            <br />a happy little home.
-          </h2>
-          <p>
-            Your dashboard will bring spending, living limits and upcoming subscriptions together. There’s no
-            financial data to show here yet.
-          </p>
-          <Link href="/quick-add" className="button">
-            Explore Quick add <span aria-hidden="true">↗</span>
-          </Link>
-        </div>
-        <div className="mascot-orbit">
-          <Penny size={220} />
-        </div>
-      </section>
-      <div className="section-heading">
-        <div>
-          <p className="eyebrow">A home for every purpose</p>
-          <h2>Meet your bottle buddies</h2>
-        </div>
-        <Link href="/mascots" className="text-link">
-          View the gallery ↗
+        <Link href="/quick-add" className="button">
+          ＋ Quick add
         </Link>
       </div>
-      <div className="bottle-grid">
-        {bottleMascots.map(({ key, name, bottle, Component }) => (
-          <article key={key} className="card bottle-card">
-            <Component size={88} />
-            <h3>{bottle}</h3>
-            <p>{name}</p>
-            <span className="muted">Balance not available yet</span>
-          </article>
-        ))}
-      </div>
-      <section className="notice">
-        <h2>Growing one piece at a time</h2>
-        <p>
-          This is the app’s visual foundation. Transaction entry, balances and reports will arrive in the next
-          phases.
+      {payday === "error" && (
+        <p className="form-error" role="alert">
+          That pay day couldn’t be dismissed. It may already be resolved.
         </p>
-      </section>
+      )}
+      <PayDayBanner slots={dashboard.pendingReminders} dismiss={dismissPayDay} />
+      {!view.hasActivity ? (
+        <section className="card welcome">
+          <div>
+            <p className="eyebrow">Hello from Penny</p>
+            <h2>
+              Let’s give your money
+              <br />a happy little home.
+            </h2>
+            <p>Log your first expense or income and this page will fill with your month at a glance.</p>
+            <Link href="/quick-add" className="button">
+              Add your first entry <span aria-hidden="true">↗</span>
+            </Link>
+          </div>
+          <div className="mascot-orbit">
+            <Penny size={220} />
+          </div>
+        </section>
+      ) : null}
+      <div className="dash-grid">
+        <LivingLimitCard
+          status={dashboard.livingLimit}
+          currency={currency}
+          incompleteCount={dashboard.livingMissingRateExpenseIds.length}
+        />
+        <SpendCard
+          totalMinor={report.totalSpendMinor}
+          deltaMinor={report.deltaVsPreviousMinor}
+          currency={currency}
+        />
+        <CategoryBars rows={report.byCategory} categories={view.categories} currency={currency} />
+        <UpcomingCharges items={dashboard.upcomingSubscriptions} />
+      </div>
+      <BottleBalances balances={dashboard.bottleBalances} bottles={view.bottles} currency={currency} />
     </>
   );
 }

@@ -55,6 +55,16 @@ const rowBase = (p: ComparisonPoint): RowBase => ({
 export const OTHER_CATEGORY_ID = "__other__";
 /** Neutral swatch for the "Other" bucket. */
 export const OTHER_CATEGORY_COLOR = "#B8B5C4";
+/** Chart series palette from docs/theme.md (muted pastels). */
+export const CHART_PALETTE = [
+  "#7C8C78",
+  "#A3907A",
+  "#8A9BAE",
+  "#B59AA6",
+  "#C2AE7E",
+  "#8FA89C",
+  "#A88C8C",
+] as const;
 
 export interface StackSeries {
   id: Id;
@@ -112,9 +122,16 @@ export function stackedCategoryRows(
   const hasOther = rows.some((r) => (r.values[OTHER_CATEGORY_ID] ?? 0) > 0);
   if (!hasOther) for (const r of rows) delete r.values[OTHER_CATEGORY_ID];
 
+  // 11 default categories share a 7-colour palette, so two visible series can collide
+  // (e.g. Groceries/Daily and Tuition & Education). Keep each category's own colour when it
+  // is unique among the visible series; otherwise take the next unused palette colour.
+  const used = new Set<string>();
   const chartSeries: StackSeries[] = top.map((id) => {
     const c = known.get(id)!;
-    return { id, name: c.name, color: c.color };
+    const own = c.color.toUpperCase();
+    const color = !used.has(own) ? own : (CHART_PALETTE.find((p) => !used.has(p)) ?? own);
+    used.add(color);
+    return { id, name: c.name, color };
   });
   if (hasOther) chartSeries.push({ id: OTHER_CATEGORY_ID, name: "Other", color: OTHER_CATEGORY_COLOR });
   return { series: chartSeries, rows };

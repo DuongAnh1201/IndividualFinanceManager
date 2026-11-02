@@ -164,3 +164,29 @@ describe("paymentSplit", () => {
     expect(paymentSplit(report({ credit: 0, debit: 0, cash: 0 }))).toEqual([]);
   });
 });
+
+describe("stackedCategoryRows colours", () => {
+  it("gives visible series distinct colours when categories share one", () => {
+    const s = series([
+      point("2026-11-01", {
+        byCategory: [
+          { categoryId: "groceries", totalMinor: 300 },
+          { categoryId: "tuition", totalMinor: 450 },
+          { categoryId: "dining", totalMinor: 80 },
+        ],
+        spendMinor: 830,
+      }),
+    ]);
+    const chart = stackedCategoryRows(s, [
+      cat("groceries", "#A3907A"),
+      cat("tuition", "#a3907a"), // same colour as groceries (palette cycles over 11 categories)
+      cat("dining", "#8A9BAE"),
+    ]);
+    const colors = chart.series.map((x) => x.color);
+    expect(new Set(colors).size).toBe(colors.length);
+    // The biggest keeps its own colour; the clash moves to the first unused palette colour.
+    expect(chart.series.find((x) => x.id === "tuition")?.color).toBe("#A3907A");
+    expect(chart.series.find((x) => x.id === "groceries")?.color).toBe("#7C8C78");
+    expect(chart.series.find((x) => x.id === "dining")?.color).toBe("#8A9BAE");
+  });
+});
