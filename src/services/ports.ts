@@ -41,6 +41,7 @@ export interface Repositories {
   subscriptions: {
     list(): Subscription[];
     get(id: Id): Subscription | undefined;
+    insert(sub: Subscription): void;
     update(sub: Subscription): void;
   };
   incomes: {
