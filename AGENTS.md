@@ -22,6 +22,7 @@ A personal finance manager for Tom: expenses, subscriptions, income split into b
 | claude3 | business rules: expenses, living limit, reports, currency | `src/domain/` |
 | codex1 | presentation: theme, mascots, screens, charts, notifications | `src/app/`, `src/ui/` |
 | codex2 | database: schema, migrations, repositories, seed, backup | `src/db/` |
+| approver | answers workers' routine permission prompts (see Approver) | none |
 
 Stay in your folders. Need a change elsewhere (e.g. a new type in `types.ts`)? `tmv send` the owner, or note it in your PR.
 
@@ -38,6 +39,13 @@ Stay in your folders. Need a change elsewhere (e.g. a new type in `types.ts`)? `
 - Money is integer minor units + currency. Never floats.
 - Mascots and art are original. No copyrighted characters.
 - Never commit `data/` (Tom's real finance data) or secrets.
+
+### Approver
+- `approver` (codex) watches the workers (claude2, claude3, codex1, codex2) for permission prompts. It never answers prompts for claude or secretary, and writes no code.
+- **Approves** routine dev work in the project or the worker's own worktree: file edits, npm/npx/test/lint/build, git on the worker's own branch, gh PR commands, tmv, local dev servers, headless Chrome with a throwaway `/tmp` profile, tests that clean up their own temp dirs.
+- **Escalates to claude** (`tmv send claude "CREDENTIAL: …"` or `"REVIEW: …"`) and leaves the prompt open: anything involving credentials (tokens, keys, passwords, logins, `.env`, keychain), and risky or irreversible actions (deleting pre-existing paths outside the worktree, force-push or push to `main`, merges, deleting branches/issues, sudo, global config, writing outside the project, `curl | sh`, contacting outside services, committing `data/` or secrets).
+- claude decides, or asks Tom for anything involving credentials or that can't be undone.
+- Every decision is logged to `.tomville/approvals-log.jsonl`.
 
 ### Logging
 - Every message between agents goes through `tmv send` (logged to `.tomville/messages.jsonl`). No `herdr agent prompt`.
