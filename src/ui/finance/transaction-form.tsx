@@ -84,7 +84,15 @@ export function TransactionForm({
           </select>
         </Field>
         <Field name="date" label="Date" state={state}>
-          <input id="date" name="date" type="date" required {...bind("date")} {...fieldA11y("date", state)} />
+          <input
+            id="date"
+            name="date"
+            type="date"
+            readOnly={expense?.source === "subscription"}
+            required
+            {...bind("date")}
+            {...fieldA11y("date", state)}
+          />
         </Field>
         {kind === "income" ? (
           <Field name="source" label="Income source" state={state}>
