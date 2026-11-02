@@ -24,10 +24,14 @@ import type {
 } from "../domain/types";
 
 export interface Repositories {
-  settings: { get(): Settings };
-  paymentMethods: { list(): PaymentMethod[] };
-  categories: { list(): Category[]; update(category: Category): void };
-  bottles: { list(): Bottle[]; update(bottle: Bottle): void };
+  settings: { get(): Settings; update(settings: Settings): void };
+  paymentMethods: {
+    list(): PaymentMethod[];
+    create(method: PaymentMethod): void;
+    update(method: PaymentMethod): void;
+  };
+  categories: { list(): Category[]; create(category: Category): void; update(category: Category): void };
+  bottles: { list(): Bottle[]; create(bottle: Bottle): void; update(bottle: Bottle): void };
   /** Versions include their ratios (ordered by bottle sortOrder). Never edited, only inserted. */
   ruleVersions: { list(): BottleRuleVersion[]; insert(version: BottleRuleVersion): void };
   expenses: {
@@ -70,7 +74,7 @@ export interface Repositories {
     get(month: IsoMonth): LivingLimit | undefined;
     upsert(limit: LivingLimit): void;
   };
-  exchangeRates: { list(): ExchangeRate[] };
+  exchangeRates: { list(): ExchangeRate[]; upsert(rate: ExchangeRate): void };
   reminders: {
     list(): Reminder[];
     upsert(reminder: Reminder): void;
