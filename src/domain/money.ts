@@ -3,6 +3,10 @@ import type { CurrencyCode, Money } from "./types";
 /** Minor-unit exponent per currency (ISO 4217, D-013). Extend when adding currencies. */
 export const CURRENCY_EXPONENT: Record<CurrencyCode, number> = { USD: 2, VND: 0 };
 
+export function isCurrencyCode(value: unknown): value is CurrencyCode {
+  return typeof value === "string" && Object.hasOwn(CURRENCY_EXPONENT, value);
+}
+
 export function currencyExponent(currency: CurrencyCode): number {
   const exp = CURRENCY_EXPONENT[currency];
   if (exp === undefined) throw new RangeError(`Unknown currency: ${currency}`);
