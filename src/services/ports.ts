@@ -13,6 +13,7 @@ import type {
   Expense,
   Id,
   Income,
+  IsoDate,
   IsoMonth,
   LivingLimit,
   MonthlyReport,
@@ -34,6 +35,7 @@ export interface Repositories {
     insert(expense: Expense): void;
     get(id: Id): Expense | undefined;
     update(expense: Expense): void;
+    delete(id: Id): void;
     insertMany(expenses: Expense[]): void;
     /** `subscriptionId|billingMonth` keys of posted subscription charges (see chargeKey). */
     postedChargeKeys(): Set<string>;
@@ -49,9 +51,11 @@ export interface Repositories {
     get(id: Id): Income | undefined;
     insert(income: Income): void;
     update(income: Income): void;
+    delete(id: Id): void;
   };
   allocations: {
     list(): BottleAllocation[];
+    deleteForIncome(incomeId: Id): void;
     insertMany(allocations: BottleAllocation[]): void;
     /** Delete the income's allocations and insert the given ones. */
     replaceForIncome(incomeId: Id, allocations: BottleAllocation[]): void;
@@ -63,7 +67,11 @@ export interface Repositories {
     upsert(limit: LivingLimit): void;
   };
   exchangeRates: { list(): ExchangeRate[] };
-  reminders: { list(): Reminder[]; upsert(reminder: Reminder): void };
+  reminders: {
+    list(): Reminder[];
+    upsert(reminder: Reminder): void;
+    delete(slot: IsoDate): void;
+  };
   monthlyReports: {
     /** Months that already have a snapshot. */
     months(): IsoMonth[];

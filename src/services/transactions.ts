@@ -108,3 +108,47 @@ export function updateIncome(deps: ServiceDeps, id: Id, input: IncomeInput): Res
     return ok(income);
   });
 }
+
+/**
+ * Delete a manual expense. Subscription charges cannot be deleted (autopost would
+ * re-create them): end or edit the subscription instead.
+ */
+export function deleteExpense(deps: ServiceDeps, id: Id): Result<{ id: Id }, FieldError> {
+  const { repos } = deps;
+  return repos.transaction(() => {
+    const existing = repos.expenses.get(id);
+    if (!existing) return notFound("Expense");
+    if (existing.source === "subscription") {
+      return fail([
+        {
+          code: "subscription-charge",
+          field: "id",
+          message: "Subscription charges can't be deleted; end or edit the subscription instead.",
+        },
+      ]);
+    }
+    repos.expenses.delete(id);
+    return ok({ id });
+  });
+}
+
+/**
+ * Delete an income with its allocations. If it had resolved a pay-day slot and no other
+ * income resolves that slot, the slot's stored "done" reminder is removed so it shows
+ * as pending again (BR-5).
+ */
+export function deleteIncome(deps: ServiceDeps, id: Id): Result<{ id: Id }, FieldError> {
+  const { repos } = deps;
+  return repos.transaction(() => {
+    const existing = repos.incomes.get(id);
+    if (!existing) return notFound("Income");
+    repos.allocations.deleteForIncome(id);
+    repos.incomes.delete(id);
+    const slot = existing.payDaySlot;
+    if (slot && !repos.incomes.list().some((i) => i.payDaySlot === slot)) {
+      const row = repos.reminders.list().find((r) => r.slot === slot);
+      if (row?.status === "done") repos.reminders.delete(slot);
+    }
+    return ok({ id });
+  });
+}

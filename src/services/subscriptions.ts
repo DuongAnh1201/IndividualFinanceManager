@@ -109,3 +109,8 @@ export function changeSubscriptionPrice(
 }
 
 export { chargeKey };
+
+/** "Remove" a subscription = set endDate to today (D-017); past expenses stay, no future posts. */
+export function removeSubscription(deps: ServiceDeps, id: Id): Result<Subscription, FieldError> {
+  return endSubscription(deps, id);
+}
