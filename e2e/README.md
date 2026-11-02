@@ -18,3 +18,8 @@ CHROME_PATH=/path/to/chrome npm run test:e2e   # non-default Chrome location
 Quick add expense (defaults, server-side rejection keeps input, VND with rate), income from a pay-day link (5:1:1:1:1:1 split and slot recorded, checked in the temp DB), subscriptions (create, back-posted charges without duplicates, remove), Transactions filters / edit / delete, no horizontal overflow at 390px, basic a11y and keyboard order with visible focus on every screen, and a no-console-errors check per route.
 
 Tests share one temp database and run in file order; they use unique notes (`e2e …`) and verify results through the UI and a read-only DB handle (`queryDb`).
+
+## `qa-dashboard.e2e.ts`
+
+Dashboard: Penny's mood (read from the SVG) and status text, percentage and progressbar for no limit / ~50% / ~83% / exactly 100% / limit 0 with spend; the pay-day banner (one banner, Log income keeps `payDaySlot`, Dismiss, error notice). Backup/restore edge cases (needs file + checkbox, truncated and garbage files rejected, the safety backup is restorable). Reports week / month / year windows (five ranges, calendar years, unknown granularity falls back).
+Specs run in alphabetical order on one shared temp DB (`flows` → `phase3` → `qa-dashboard` → `reports` → `smoke`).
