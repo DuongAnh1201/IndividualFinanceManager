@@ -97,3 +97,55 @@ transactional, and unsupported existing currency values cause rollback.
 
 Seed palette and payment-method refinements apply to fresh inserts. Re-seeding an
 existing database intentionally preserves edited/default rows already present.
+
+## Managed live connection and maintenance
+
+Server code uses `withDatabase(repos => synchronousWork)` from `@/db/holder`.
+The holder lazily opens, migrates and seeds one live connection (machine timezone
+for initial settings). `getDb()` and `getRepositories()` are also available, but
+obtain them per request and never cache their results in another module. Requests
+do not close the shared connection; `closeDatabase()` is for shutdown/tests.
+
+**Integration required in codex1's #16 or #25:** update
+`src/app/_lib/finance.ts` so `withFinance(work)` wraps its clock construction and
+`work({ repos, clock })` in `withDatabase(repos => ...)`, replacing its own
+open/migrate/seed/close lifecycle. No service function changes are needed because
+services receive repositories for each call. Settings actions call the maintenance
+functions outside `withFinance`/`withDatabase`. Do not enable Restore before all
+server entrypoints use the holder; independent request connections bypass its gate.
+
+Import `backupDatabase`, `restoreDatabase`, `validateBackup`, and `exportCsv` from
+`@/db/backup`:
+
+- `await backupDatabase(destinationFile?)` returns an absolute snapshot path. It
+  uses SQLite's backup API, including committed WAL data. The default is a unique
+  file in `backups/` beside the configured DB (normally git-ignored `data/backups`).
+- `await restoreDatabase(sourceFile)` returns `{ databasePath, safetyBackupPath }`.
+  It validates and stages a standalone snapshot, automatically backs up the live
+  data, checkpoints/closes the live connection, atomically replaces its file, and
+  reopens the holder. New requests use fresh repositories. Validation, staging,
+  safety-backup, and checkpoint failures leave the live DB unchanged. A failed
+  rename reopens the original. The automatic safety copy remains available.
+- `validateBackup(sourceFile)` opens read-only and requires the exact shipped
+  schema and migration history, SQLite integrity, valid foreign keys, and usable
+  settings. Backups from incompatible app versions are rejected without modifying
+  them; restore does not silently migrate a user's backup.
+- `exportCsv(directory?)` returns `{ directory, expensesPath, incomesPath }`. It
+  reads expenses, incomes and all lookups in one transaction and passes them to
+  the domain CSV serializers. Default exports use a new directory under
+  `data/backups`. CSV quoting, currency decimals and formula guards remain in
+  `src/domain/csv.ts`.
+
+Backup and restore use a process-local exclusive gate across asynchronous SQLite
+copy operations. `withDatabase`, direct holder getters and other maintenance calls
+throw `DatabaseBusyError` while it is held; callers can report a retryable busy
+state. Keep request callbacks synchronous. Restore cannot run inside a request
+callback or repository transaction. All app access must share this holder in one
+server process; close any external DB tools before restoring. Restore requires a
+file-backed DB; backups support in-memory databases with an explicit destination.
+
+Output files have mode 0600; export directories and temporary staging directories
+are private. Existing backup files/export directories are never overwritten.
+Within the checkout, output is restricted to git-ignored `data/`, including after
+resolving symlinked ancestors. An explicit path outside the checkout is supported.
+Tests use temporary directories and never read or modify Tom's finance database.
