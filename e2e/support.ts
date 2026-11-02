@@ -165,6 +165,16 @@ export function readDb(): { all<T>(sql: string, ...params: unknown[]): T[]; clos
   };
 }
 
+/** Test-only write to the throw-away DB (e.g. to backdate settings the app never changes). */
+export function writeDb(sql: string, ...params: unknown[]): void {
+  const sqlite = new Database(inject("databaseUrl"));
+  try {
+    sqlite.prepare(sql).run(...params);
+  } finally {
+    sqlite.close();
+  }
+}
+
 /** Runs `fn` with a fresh read-only DB handle. */
 export function queryDb<T>(sql: string, ...params: unknown[]): T[] {
   const db = readDb();

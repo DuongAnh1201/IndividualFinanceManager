@@ -101,10 +101,7 @@ export default function SettingsPage() {
 
       <section id="bottles" className="card settings-section" aria-labelledby="bottles-h">
         <h2 id="bottles-h">Bottles</h2>
-        <p>
-          Ratios decide how each new income is split. Saving creates a new rule for <em>future</em> income;
-          past allocations never change.
-        </p>
+        <p>Ratios decide how each new income is split.</p>
         <RatioEditor bottles={v.activeBottles} ratios={v.ratios} action={saveSetting} />
         <details>
           <summary>Add a bottle</summary>

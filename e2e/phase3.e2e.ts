@@ -13,6 +13,7 @@ import {
   tabAudit,
   trackBadResponses,
   trackErrors,
+  writeDb,
 } from "./support";
 
 // Runs after flows.e2e.ts on the same throw-away database (files run alphabetically, serially).
@@ -114,7 +115,14 @@ describe("Income & Bottles", () => {
 
 describe("Pay-day banner", () => {
   it("appears for due pay days, resolves one via Add income, and can dismiss another", async () => {
-    // Make every month's 1st a pay day so due, unresolved slots exist whatever today's date is.
+    // Reminders look back only to settings.first_used_on (#54). The throw-away DB was first used
+    // today, so move it to the 1st of two months ago; then make every month's 1st a pay day so
+    // several due, unresolved slots exist whatever today's date is.
+    const d = new Date();
+    d.setDate(1);
+    d.setMonth(d.getMonth() - 2);
+    const firstUsedOn = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+    writeDb(`update settings set first_used_on = ? where id = 1`, firstUsedOn);
     await withPage(async (page) => {
       await page.goto(`${baseUrl()}/settings`);
       const form = page.locator("form", { has: page.getByLabel("Pay days of the month") });
@@ -288,7 +296,8 @@ describe("Backup, export and restore", () => {
       });
       await page.getByLabel("Yes, replace my current data with this backup").check();
       await page.getByRole("button", { name: "Restore backup" }).click();
-      await expect.poll(() => page.locator("[role=alert]").innerText()).toContain("isn’t a valid");
+      // `.form-error`: Next.js also renders an (empty) route announcer with role=alert.
+      await expect.poll(() => page.locator(".form-error[role=alert]").innerText()).toContain("isn’t a valid");
     });
     expect(queryDb(`select 1 from income where source = 'e2e Salary'`).length).toBe(1);
   });
