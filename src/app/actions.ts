@@ -16,6 +16,7 @@ import {
   runSubscriptionAutopost,
 } from "@/services/subscriptions";
 import type { FormState } from "@/ui/finance/types";
+import type { CurrencyCode } from "@/domain/types";
 import { withFinance } from "./_lib/finance";
 import { formFailure, readMoney, text, transactionInput } from "./_lib/form-data";
 import { spendingAlertParams } from "@/ui/spending-alert";
@@ -36,6 +37,7 @@ export async function saveTransaction(_previous: FormState, data: FormData): Pro
   const id = text(data, "id");
   let state: FormState | undefined;
   let savedExpense: ExpenseSaved | undefined;
+  let alertCurrency: CurrencyCode | undefined;
   try {
     state = withFinance((deps) => {
       if (kind === "income") {
@@ -56,6 +58,7 @@ export async function saveTransaction(_previous: FormState, data: FormData): Pro
       const result = id ? editExpense(deps, id, input) : addExpense(deps, input);
       if (!result.ok) return formFailure(result.errors);
       savedExpense = result.value;
+      alertCurrency = deps.repos.settings.get().baseCurrency;
     });
   } catch {
     return storageError();
@@ -63,9 +66,8 @@ export async function saveTransaction(_previous: FormState, data: FormData): Pro
   if (state) return state;
   refreshFinance();
   const params = new URLSearchParams({ saved: id ? "updated" : "added" });
-  if (savedExpense) {
-    const currency = savedExpense.expense.currency;
-    spendingAlertParams(savedExpense, currency).forEach((value, key) => params.set(key, value));
+  if (savedExpense && alertCurrency) {
+    spendingAlertParams(savedExpense, alertCurrency).forEach((value, key) => params.set(key, value));
   }
   redirect(`/transactions?${params}`);
 }

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 const fake = vi.hoisted(() => ({
-  deps: { repos: {}, clock: {} },
+  deps: { repos: { settings: { get: () => ({ baseCurrency: "USD" }) } }, clock: {} },
   addExpense: vi.fn(),
   editExpense: vi.fn(),
   addIncome: vi.fn(),
@@ -163,6 +163,36 @@ describe("finance action handoff", () => {
     });
     await expect(
       saveTransaction({}, form({ kind: "expense", currency: "USD", amount: "9" })),
+    ).rejects.toThrow(
+      "REDIRECT:/transactions?saved=added&crossing=warning&percent=86&spent=43000&limit=50000&currency=USD",
+    );
+  });
+  it("uses the USD base currency for a VND expense warning", async () => {
+    fake.addExpense.mockReturnValue({
+      ok: true,
+      value: expenseSaved({
+        expense: {
+          ...expenseSaved().expense,
+          amountMinor: 10_750_000,
+          currency: "VND",
+          fxRateToBase: 0.00004,
+        },
+        crossing: "warning",
+        status: {
+          month: "2026-11",
+          limitMinor: 50_000,
+          spentMinor: 43_000,
+          ratio: 0.86,
+          status: "warning",
+        },
+        allowance: { leftMinor: 7_000, daysLeft: 28, perDayMinor: 250 },
+      }),
+    });
+    await expect(
+      saveTransaction(
+        {},
+        form({ kind: "expense", currency: "VND", amount: "10750000", fxRateToBase: "0.00004" }),
+      ),
     ).rejects.toThrow(
       "REDIRECT:/transactions?saved=added&crossing=warning&percent=86&spent=43000&limit=50000&currency=USD",
     );

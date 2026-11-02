@@ -16,6 +16,8 @@ describe("spending alert presentation", () => {
     expect(html).toContain("86 %");
     expect(html).toContain("$430.00");
     expect(html).toContain("$500.00");
+    expect(html).toContain("(<span");
+    expect(html).not.toContain("( <span");
     expect(html).toContain("M54 91q6-7 12 0");
   });
 

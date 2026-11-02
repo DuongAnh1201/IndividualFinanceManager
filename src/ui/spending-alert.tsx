@@ -85,7 +85,7 @@ export function SpendingAlert({ alert }: { alert: SpendingAlertView }) {
             </>
           ) : (
             <>
-              Heads up: you&apos;re at <strong>{alert.percent} %</strong> of your living limit ({" "}
+              Heads up: you&apos;re at <strong>{alert.percent} %</strong> of your living limit (
               <span className="money">{money(alert.spentMinor, alert.currency)}</span> of{" "}
               <span className="money">{money(alert.limitMinor, alert.currency)}</span>).
             </>
