@@ -114,6 +114,11 @@ describe("validateExpense (BR-2)", () => {
       const r = validateExpense({ ...base, categoryId: "nodefault" }, ctx);
       expect(r.ok && r.value.bottleId).toBeNull();
     });
+    it("archived default bottle -> null, no error (D-018)", () => {
+      const c = { ...ctx, categories: [...ctx.categories, category("legacy", { defaultBottleId: "gone" })] };
+      const r = validateExpense({ ...base, categoryId: "legacy" }, c);
+      expect(r.ok && r.value.bottleId).toBeNull();
+    });
     it("rejects unknown or archived explicit bottle", () => {
       expect(codes({ ...base, bottleId: "x" })).toEqual(["unknown-bottle"]);
       expect(codes({ ...base, bottleId: "gone" })).toEqual(["archived-bottle"]);
@@ -144,15 +149,8 @@ describe("validateExpense (BR-2)", () => {
     });
   });
 
-  it("keeps source/subscription link and note", () => {
-    const r = validateExpense(
-      { ...base, source: "subscription", subscriptionId: "s1", note: "Netflix" },
-      ctx,
-    );
-    expect(r.ok && [r.value.source, r.value.subscriptionId, r.value.note]).toEqual([
-      "subscription",
-      "s1",
-      "Netflix",
-    ]);
+  it("is manual-only: source manual, no subscription link, note kept", () => {
+    const r = validateExpense({ ...base, note: "Lunch" }, ctx);
+    expect(r.ok && [r.value.source, r.value.subscriptionId, r.value.note]).toEqual(["manual", null, "Lunch"]);
   });
 });

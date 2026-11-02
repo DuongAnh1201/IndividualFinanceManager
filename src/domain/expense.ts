@@ -1,15 +1,6 @@
 import { isCurrencyCode } from "./money";
 import { monthOf, parseDate } from "./period";
-import type {
-  Bottle,
-  Category,
-  CurrencyCode,
-  ExchangeRate,
-  ExpenseSource,
-  Id,
-  IsoDate,
-  PaymentMethod,
-} from "./types";
+import type { Bottle, Category, CurrencyCode, ExchangeRate, Id, IsoDate, PaymentMethod } from "./types";
 
 /** What the user (or a subscription) submits; untrusted shape, validated by `validateExpense`. */
 export interface ExpenseInput {
@@ -23,8 +14,6 @@ export interface ExpenseInput {
   /** Omit/null to default to the category's default bottle. */
   bottleId?: Id | null;
   note?: string | null;
-  source?: ExpenseSource;
-  subscriptionId?: Id | null;
 }
 
 /** Reference data the rules need; loaded by the caller (db layer), not fetched here. */
@@ -66,8 +55,9 @@ export interface ValidExpense {
   paymentMethodId: Id;
   bottleId: Id | null;
   note: string | null;
-  source: ExpenseSource;
-  subscriptionId: Id | null;
+  /** Always manual: subscription expenses are built by BR-1 (with billingMonth), not here. */
+  source: "manual";
+  subscriptionId: null;
 }
 
 export type ExpenseValidation = { ok: true; value: ValidExpense } | { ok: false; errors: ExpenseError[] };
@@ -86,7 +76,8 @@ export function monthRate(
  * BR-2: validate an expense and fill defaults. Pure. Returns all errors at once.
  * - amount is a positive safe integer (minor units)
  * - category and payment method exist and are not archived
- * - bottleId defaults to the category's `defaultBottleId`; an explicit bottle must exist and be active
+ * - bottleId defaults to the category's `defaultBottleId` (null if that bottle is archived/unknown, D-018); an explicit bottle must exist and be active
+ * - manual only: source is always "manual"
  * - a non-base currency needs a per-transaction rate or the month's rate (snapshotted into the result)
  */
 export function validateExpense(input: ExpenseInput, ctx: ExpenseContext): ExpenseValidation {
@@ -125,7 +116,10 @@ export function validateExpense(input: ExpenseInput, ctx: ExpenseContext): Expen
     else if (bottle.archivedAt) fail("archived-bottle", "bottleId", "Bottle is archived.");
     else bottleId = bottle.id;
   } else {
-    bottleId = category?.defaultBottleId ?? null;
+    // D-018: an archived default bottle yields null (no error); the user didn't choose it.
+    const fallback = category?.defaultBottleId;
+    const def = fallback ? ctx.bottles.find((b) => b.id === fallback) : undefined;
+    bottleId = def && !def.archivedAt ? def.id : null;
   }
 
   let fxRateToBase: number | null = null;
@@ -156,8 +150,8 @@ export function validateExpense(input: ExpenseInput, ctx: ExpenseContext): Expen
       paymentMethodId: input.paymentMethodId,
       bottleId,
       note: input.note ?? null,
-      source: input.source ?? "manual",
-      subscriptionId: input.subscriptionId ?? null,
+      source: "manual",
+      subscriptionId: null,
     },
   };
 }
