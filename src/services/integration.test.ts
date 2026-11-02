@@ -5,7 +5,14 @@ import { openDatabase } from "@/db/client";
 import { createRepositories } from "@/db/repositories";
 import { seedDatabase } from "@/db/seed";
 import {
+  addBottle,
   addExpense,
+  createCategory,
+  createPaymentMethod,
+  setExchangeRate,
+  setLivingLimit,
+  transferBetweenBottles,
+  updateSettings,
   addIncome,
   createSubscription,
   getDashboard,
@@ -147,5 +154,61 @@ describe("services over SQLite (seeded)", () => {
     expect(d.repos.monthlyReports.months()).toEqual([]);
     expect(snapshotClosedMonths(d)).toEqual(["2026-11"]);
     expect(d.repos.monthlyReports.get("2026-11")?.totalSpendMinor).toBe(2600);
+  });
+
+  it("admin use-cases persist through real repositories", () => {
+    const d = setup();
+    const s = unwrap(
+      updateSettings(d, {
+        baseCurrency: "USD",
+        payDays: [25, 10],
+        weekStartsOn: 0,
+        timezone: "America/New_York",
+      }),
+    );
+    expect(d.repos.settings.get()).toEqual(s);
+    expect(s.payDays).toEqual([10, 25]);
+    const bottle = unwrap(addBottle(d, { name: "Travel", mascot: "plane" }));
+    expect(d.repos.bottles.list().some((b) => b.id === bottle.id)).toBe(true);
+    const necessities = d.repos.bottles.list()[0]!;
+    const cat = unwrap(
+      createCategory(d, {
+        name: "Pets",
+        kind: "daily",
+        countsTowardLivingLimit: true,
+        defaultBottleId: necessities.id,
+        color: "#aabbcc",
+        mascot: "dog",
+      }),
+    );
+    expect(d.repos.categories.list().some((c) => c.id === cat.id)).toBe(true);
+    expect(
+      createCategory(d, {
+        name: "pets",
+        kind: "daily",
+        countsTowardLivingLimit: true,
+        defaultBottleId: null,
+        color: "#aabbcc",
+        mascot: "dog",
+      }).ok,
+    ).toBe(false);
+    const pm = unwrap(createPaymentMethod(d, { name: "Amex", type: "credit", last4: "0001" }));
+    expect(d.repos.paymentMethods.list().some((m) => m.id === pm.id)).toBe(true);
+    unwrap(setExchangeRate(d, { month: "2026-11", currency: "VND", rateToBase: 0.00004 }));
+    unwrap(setExchangeRate(d, { month: "2026-11", currency: "VND", rateToBase: 0.00005 }));
+    expect(d.repos.exchangeRates.list()).toEqual([
+      { month: "2026-11", currency: "VND", rateToBase: 0.00005 },
+    ]);
+    unwrap(setLivingLimit(d, { month: "2026-11", limitMinor: 200_000 }));
+    expect(d.repos.livingLimits.get("2026-11")?.limitMinor).toBe(200_000);
+    unwrap(
+      transferBetweenBottles(d, {
+        fromBottleId: necessities.id,
+        toBottleId: bottle.id,
+        amountMinor: 100,
+        date: "2026-11-02",
+      }),
+    );
+    expect(d.repos.transfers.list()).toHaveLength(1);
   });
 });

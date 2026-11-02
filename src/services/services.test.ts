@@ -13,6 +13,7 @@ import {
   getDashboard,
   getMonthlyReport,
   getPendingReminders,
+  getReminderStart,
   removeBottle,
   removeSubscription,
   resplitIncome,
@@ -278,7 +279,8 @@ describe("reminders & dashboard", () => {
     expect(dash.month).toBe("2026-11");
     expect(dash.livingLimit).toMatchObject({ spentMinor: 8_500, status: "warning" });
     expect(dash.bottleBalances.find((b) => b.bottleId === "N")?.balanceMinor).toBe(50_000 - 8_500);
-    expect(dash.pendingReminders).toEqual(["2026-10-10", "2026-10-25"]);
+    // First activity is 2026-11-10, so no earlier slots are invented; the 11-10 slot is resolved.
+    expect(dash.pendingReminders).toEqual([]);
     expect(dash.upcomingSubscriptions.map((u) => u.nextChargeDate)).toEqual(["2026-11-15"]);
   });
 });
@@ -458,5 +460,28 @@ describe("autopost and archived default bottle (D-018)", () => {
     unwrap(createSubscription(d, subInput));
     const posted = runSubscriptionAutopost(d, "2026-10-20");
     expect(posted.every((e) => e.bottleId === null)).toBe(true);
+  });
+});
+
+describe("reminder start policy", () => {
+  it("fresh database: current month start, no invented overdue slots", () => {
+    const d = makeDeps({ today: "2026-11-12" });
+    expect(getReminderStart(d)).toBe("2026-11-01");
+    expect(getPendingReminders(d)).toEqual(["2026-11-10"]);
+    expect(getDashboard(d).pendingReminders).toEqual(["2026-11-10"]);
+  });
+
+  it("uses the earliest income/expense/reminder date so older missed slots stay pending", () => {
+    const d = makeDeps({ today: "2026-11-26" });
+    unwrap(addExpense(d, { ...expenseInput, date: "2026-09-05" }));
+    expect(getReminderStart(d)).toBe("2026-09-05");
+    expect(getPendingReminders(d)).toEqual([
+      "2026-09-10",
+      "2026-09-25",
+      "2026-10-10",
+      "2026-10-25",
+      "2026-11-10",
+      "2026-11-25",
+    ]);
   });
 });
