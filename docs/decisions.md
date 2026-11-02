@@ -12,3 +12,7 @@ Append-only. Format: `D-NNN — date — decision — why`. Anyone may propose; 
 - **D-008 — 2026-11-01** — Charts support week / month / year, last 5 periods. — Tom's request.
 - **D-009 — 2026-11-01** — Cute neutral theme with **original** mascots only (no copyrighted characters). — Tom wants cartoon characters; avoid IP issues.
 - **D-010 — 2026-11-01** — Domain layer is pure (no I/O, date injected). — Testable and reusable by the phone app.
+- **D-011 — 2026-11-01** — TS types use camelCase; DB columns use snake_case; mapping happens only in `src/db/` repositories. — Idiomatic on both sides, single mapping point.
+- **D-012 — 2026-11-01** — `Period = { granularity: 'week'|'month'|'year'; id: string; start: IsoDate; end: IsoDate }`, **half-open** `[start, end)`. Ids: week = its start date `YYYY-MM-DD`, month = `YYYY-MM`, year = `YYYY`. Types in `types.ts` (claude2), functions in `period.ts` (claude3). — Week ids stay unambiguous for any week start day; half-open makes string comparison simple.
+- **D-013 — 2026-11-01** — Currency exponents: USD 2, VND 0 (ISO 4217); list is extensible. Money ops throw on currency mismatch; conversion without a rate returns a "missing rate" result. — Matches BR-8.
+- **D-014 — 2026-11-01** — Date math helpers (`daysInMonth`, `clampDay`, `monthOf`) live once in `period.ts` (claude3); BR-1 imports them. — No duplicated date logic.
