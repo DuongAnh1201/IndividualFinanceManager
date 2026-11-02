@@ -81,10 +81,16 @@ function categoryTotals(items: readonly Converted[]): CategoryTotal[] {
     .sort((a, b) => b.totalMinor - a.totalMinor || a.categoryId.localeCompare(b.categoryId));
 }
 
-function incomeBase(incomes: readonly Income[], data: ReportData): number {
-  let total = 0;
-  for (const i of incomes) total += toBaseMinor(i, data.baseCurrency, data.exchangeRates) ?? 0;
-  return total;
+/** Base-currency income total; incomes without a rate are excluded and listed (never counted as 1). */
+function incomeBase(incomes: readonly Income[], data: ReportData): { totalMinor: number; missingIds: Id[] } {
+  let totalMinor = 0;
+  const missingIds: Id[] = [];
+  for (const i of incomes) {
+    const base = toBaseMinor(i, data.baseCurrency, data.exchangeRates);
+    if (base === null) missingIds.push(i.id);
+    else totalMinor += base;
+  }
+  return { totalMinor, missingIds };
 }
 
 function spendTotal(items: readonly Converted[]): number {
@@ -116,6 +122,7 @@ export function buildMonthlyReport(month: IsoMonth, data: ReportData): MonthlyRe
   for (const c of converted) byKind[c.category.kind] += c.baseMinor;
 
   const monthIncomes = data.incomes.filter((i) => inRange(i.date, period.start, period.end));
+  const income = incomeBase(monthIncomes, data);
   const incomeById = new Map(monthIncomes.map((i) => [i.id, i]));
   const alloc = new Map<Id, number>();
   for (const a of data.allocations) {
@@ -170,13 +177,14 @@ export function buildMonthlyReport(month: IsoMonth, data: ReportData): MonthlyRe
     byPaymentMethod,
     byPaymentType,
     byKind,
-    incomeTotalMinor: incomeBase(monthIncomes, data),
+    incomeTotalMinor: income.totalMinor,
     bottleAllocations,
     bottleBalances: [...data.bottleBalances],
     livingLimit: livingLimitStatusFor(month, data.livingLimits, spendTotal(living)),
     topExpenses,
     deltaVsPreviousMinor,
     missingRateExpenseIds: missing,
+    missingRateIncomeIds: income.missingIds,
   };
 }
 
@@ -220,15 +228,19 @@ export function buildComparisonSeries(
       data.expenses.filter((e) => inRange(e.date, period.start, period.end)),
       data,
     );
-    const incomes = data.incomes.filter((i) => inRange(i.date, period.start, period.end));
+    const income = incomeBase(
+      data.incomes.filter((i) => inRange(i.date, period.start, period.end)),
+      data,
+    );
     return {
       period,
       byCategory: categoryTotals(converted),
-      incomeMinor: incomeBase(incomes, data),
+      incomeMinor: income.totalMinor,
       spendMinor: spendTotal(converted),
       livingLimitMinor: livingLimitForPeriod(period, data.livingLimits),
       livingSpentMinor: spendTotal(converted.filter((c) => c.category.countsTowardLivingLimit)),
       missingRateCount: missing.length,
+      missingRateIncomeCount: income.missingIds.length,
     };
   });
   return { granularity, baseCurrency: data.baseCurrency, points };
