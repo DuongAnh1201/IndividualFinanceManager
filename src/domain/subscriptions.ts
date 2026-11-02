@@ -159,6 +159,7 @@ export function monthlyTotalsByCurrency(
   return [...totals.entries()]
     .sort(([a], [b]) => (a < b ? -1 : 1))
     .map(([currency, amountMinor]) => ({ currency, amountMinor }));
+}
 
 export interface SubscriptionInput {
   name: string;

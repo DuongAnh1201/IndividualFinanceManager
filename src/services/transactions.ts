@@ -1,5 +1,5 @@
 import { activeRuleVersion, allocateIncome } from "../domain/bottleSplit";
-import { validateExpense, type ExpenseInput, type ValidExpense } from "../domain/expense";
+import { validateExpense, type ExpenseInput } from "../domain/expense";
 import { validateIncome, type IncomeInput } from "../domain/income";
 import { completeReminder } from "../domain/reminders";
 import type { Expense, Id, Income } from "../domain/types";
@@ -25,7 +25,8 @@ export function addExpense(deps: ServiceDeps, input: ExpenseInput): Result<Expen
     const now = clock.now();
     const expense: Expense = {
       id: clock.newId(),
-      ...(v.value as ValidExpense),
+      ...v.value,
+      billingMonth: null,
       createdAt: now,
       updatedAt: now,
     };

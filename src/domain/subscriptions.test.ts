@@ -197,6 +197,8 @@ describe("monthlyTotalsByCurrency", () => {
       { currency: "VND", amountMinor: 99000 },
     ]);
     expect(monthlyTotalsByCurrency([], "2026-03-01")).toEqual([]);
+  });
+});
 
 describe("validateSubscription", () => {
   const ctx = {
