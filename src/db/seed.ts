@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import { pathToFileURL } from "node:url";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import { openDatabase } from "./client";
@@ -36,8 +37,13 @@ export function seedDatabase(
   now = new Date(),
 ) {
   db.transaction((tx) => {
-    tx.insert(s.settings).values({ id: 1, timezone }).onConflictDoNothing().run();
-    initializeFirstUse(tx, now);
+    // Raw insert lists only the columns every schema version has, so seeding also works on a
+    // database that has not yet received later migrations (upgrade tests).
+    tx.run(sql`INSERT OR IGNORE INTO settings (id, timezone) VALUES (1, ${timezone})`);
+    const hasFirstUse = tx
+      .all<{ name: string }>(sql`PRAGMA table_info(settings)`)
+      .some((c) => c.name === "first_used_on");
+    if (hasFirstUse) initializeFirstUse(tx, now);
     bottles.forEach(([name, mascot], i) => {
       tx.insert(s.bottle)
         .values({ id: uuid(i + 1), name, mascot, sort_order: i })
