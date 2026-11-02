@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { saveTransaction } from "@/app/actions";
 import { withFinance, formOptions } from "@/app/_lib/finance";
 import { TransactionForm } from "@/ui/finance/transaction-form";
+import { AllowanceLine, type AllowanceView } from "@/ui/allowance-line";
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Quick add" };
 export default async function QuickAdd({
@@ -15,9 +16,11 @@ export default async function QuickAdd({
   const slot = typeof query.payDaySlot === "string" ? query.payDaySlot : undefined;
   const kind = query.kind === "income" || slot ? "income" : "expense";
   const id = typeof query.id === "string" ? query.id : undefined;
-  const { options, existing } = withFinance((deps) => ({
+  const { options, existing, allowance } = withFinance((deps) => ({
     options: formOptions(deps),
     existing: id ? (kind === "income" ? deps.repos.incomes.get(id) : deps.repos.expenses.get(id)) : undefined,
+    // #61 supplies the real remainingAllowance field. Keep this layout slot inert until it lands.
+    allowance: null as AllowanceView | null,
   }));
   if (id && !existing) notFound();
   return (
@@ -45,6 +48,11 @@ export default async function QuickAdd({
             Income
           </Link>
         </nav>
+      )}
+      {kind === "expense" && (
+        <div className="quick-allowance" aria-label="Left to spend this month">
+          <AllowanceLine allowance={allowance} currency={options.baseCurrency} compact />
+        </div>
       )}
       <TransactionForm
         key={`${kind}-${id ?? "new"}-${slot ?? ""}`}

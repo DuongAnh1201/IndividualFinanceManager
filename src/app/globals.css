@@ -988,6 +988,42 @@ textarea {
 .meter-caption {
   margin-top: 10px;
 }
+.allowance-line {
+  margin-top: 10px;
+  color: var(--text-secondary);
+}
+.allowance-line strong {
+  color: var(--text);
+}
+.allowance-line-compact {
+  margin: 0;
+  font-size: 0.9rem;
+}
+.quick-allowance:empty {
+  display: none;
+}
+.quick-allowance:not(:empty) {
+  margin: -12px 0 20px;
+  padding-left: 14px;
+  border-left: 3px solid var(--accent);
+}
+.spending-alert {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 22px;
+  margin-bottom: 24px;
+  border: 2px solid var(--warn);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+.spending-alert-over {
+  border-color: var(--danger);
+}
+.spending-alert p:not(.eyebrow) {
+  margin: 0;
+}
 .bar-list,
 .plain-list {
   list-style: none;
@@ -1159,6 +1195,14 @@ textarea {
   .living-head {
     flex-direction: column;
     align-items: flex-start;
+  }
+  .spending-alert {
+    align-items: flex-start;
+    padding: 16px;
+  }
+  .spending-alert svg {
+    width: 60px;
+    height: 60px;
   }
 }
 .month-nav {
