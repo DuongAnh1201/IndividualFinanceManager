@@ -268,6 +268,8 @@ export interface MonthlyReport {
   deltaVsPreviousMinor: number | null;
   /** Expenses lacking an FX rate (BR-8); excluded from totals. */
   missingRateExpenseIds: Id[];
+  /** Incomes lacking an FX rate (BR-8); excluded from income and allocation totals. */
+  missingRateIncomeIds: Id[];
 }
 
 export interface ComparisonPoint {
@@ -279,6 +281,8 @@ export interface ComparisonPoint {
   livingSpentMinor: number;
   /** Expenses without an FX rate (BR-8), excluded from totals. */
   missingRateCount: number;
+  /** Incomes without an FX rate (BR-8), excluded from `incomeMinor`. */
+  missingRateIncomeCount: number;
 }
 
 export interface ComparisonSeries {

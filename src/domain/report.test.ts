@@ -167,6 +167,19 @@ describe("buildMonthlyReport", () => {
     expect(rep.totalSpendMinor).toBe(300);
     expect(rep.missingRateExpenseIds).toEqual(["m"]);
   });
+  it("missing-rate incomes: excluded from income total, listed", () => {
+    const rep = buildMonthlyReport("2026-12", {
+      ...base,
+      incomes: [
+        inc({ id: "ok", date: "2026-12-10", amountMinor: 5000 }),
+        inc({ id: "vnd", date: "2026-12-10", currency: "VND", amountMinor: 9_000_000 }),
+      ],
+      allocations: [{ id: "al", incomeId: "vnd", bottleId: "nec", amountMinor: 9_000_000 }],
+    });
+    expect(rep.incomeTotalMinor).toBe(5000);
+    expect(rep.missingRateIncomeIds).toEqual(["vnd"]);
+    expect(rep.bottleAllocations).toEqual([{ bottleId: "nec", totalMinor: 0 }]);
+  });
   it("empty month", () => {
     const rep = buildMonthlyReport("2027-01", base);
     expect(rep).toMatchObject({
@@ -257,6 +270,15 @@ describe("buildComparisonSeries", () => {
     expect(s.points[4]?.livingLimitMinor).toBe(12 * 3100);
     expect(s.points[0]?.livingLimitMinor).toBeNull();
     expect(s.baseCurrency).toBe("USD");
+  });
+  it("missingRateIncomeCount per point", () => {
+    const d = {
+      ...data,
+      incomes: [...data.incomes, inc({ currency: "VND", amountMinor: 1, date: "2026-12-05" })],
+    };
+    const s = buildComparisonSeries("month", 2, "2026-12-15", 1, d);
+    expect(s.points.map((p) => p.missingRateIncomeCount)).toEqual([0, 1]);
+    expect(s.points[1]?.incomeMinor).toBe(0);
   });
   it("by category per point", () => {
     const s = buildComparisonSeries("month", 1, "2026-10-15", 1, data);
