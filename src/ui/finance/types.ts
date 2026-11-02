@@ -1,5 +1,6 @@
 import type { Bottle, Category, PaymentMethod, CurrencyCode, Income, Expense } from "@/domain/types";
 export interface FormState {
+  success?: string;
   error?: string;
   fields?: Record<string, string>;
 }
