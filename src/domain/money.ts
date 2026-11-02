@@ -88,7 +88,7 @@ export function formatMoney(m: Money, locale = "en-US"): string {
 
 export type ParseMoneyError = "empty" | "invalid" | "too-many-decimals" | "too-large";
 
-export type ParseMoneyResult = { ok: true; amountMinor: number } | { ok: false; reason: ParseMoneyError };
+export type ParseMoneyResult = { ok: true; amountMinor: number } | { ok: false; error: ParseMoneyError };
 
 /**
  * Parse user-typed text into integer minor units, with no floating point.
@@ -106,7 +106,7 @@ export function parseMoneyInput(text: string, currency: CurrencyCode): ParseMone
     .replace(/\s+/g, "")
     .replace(/^(?:USD|VND|\$|₫)/i, "")
     .replace(/(?:USD|VND|\$|₫)$/i, "");
-  if (cleaned === "") return { ok: false, reason: "empty" };
+  if (cleaned === "") return { ok: false, error: "empty" };
 
   let whole: string;
   let frac = "";
@@ -114,21 +114,21 @@ export function parseMoneyInput(text: string, currency: CurrencyCode): ParseMone
     whole = cleaned.replaceAll(".", "");
   } else {
     const parts = cleaned.split(".");
-    if (parts.length > 2) return { ok: false, reason: "invalid" };
+    if (parts.length > 2) return { ok: false, error: "invalid" };
     whole = parts[0] ?? "";
     frac = parts[1] ?? "";
-    if (whole.includes(",") && !/^\d{1,3}(?:,\d{3})+$/.test(whole)) return { ok: false, reason: "invalid" };
+    if (whole.includes(",") && !/^\d{1,3}(?:,\d{3})+$/.test(whole)) return { ok: false, error: "invalid" };
     whole = whole.replaceAll(",", "");
     if (!/^\d*$/.test(whole) || !/^\d*$/.test(frac) || (whole === "" && frac === "")) {
-      return { ok: false, reason: "invalid" };
+      return { ok: false, error: "invalid" };
     }
     if (frac.length > exp) {
-      return { ok: false, reason: "too-many-decimals" };
+      return { ok: false, error: "too-many-decimals" };
     }
   }
 
   const digits = (whole === "" ? "0" : whole) + frac.padEnd(exp, "0");
   const amountMinor = Number(digits);
-  if (!Number.isSafeInteger(amountMinor)) return { ok: false, reason: "too-large" };
+  if (!Number.isSafeInteger(amountMinor)) return { ok: false, error: "too-large" };
   return { ok: true, amountMinor };
 }

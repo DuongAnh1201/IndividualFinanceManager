@@ -103,7 +103,7 @@ describe("parseMoneyInput", () => {
   const ok = (text: string, cur: "USD" | "VND", amountMinor: number) =>
     expect(parseMoneyInput(text, cur)).toEqual({ ok: true, amountMinor });
   const bad = (text: string, cur: "USD" | "VND", reason: string) =>
-    expect(parseMoneyInput(text, cur)).toEqual({ ok: false, reason });
+    expect(parseMoneyInput(text, cur)).toEqual({ ok: false, error: reason });
 
   it("USD whole, decimals and grouping", () => {
     ok("12", "USD", 1200);
