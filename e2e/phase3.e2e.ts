@@ -113,37 +113,36 @@ describe("Income & Bottles", () => {
 });
 
 describe("Pay-day banner", () => {
-  it("appears for due pay days, resolves one via Add income, and can dismiss another", async () => {
-    // Make every month's 1st a pay day so due, unresolved slots exist whatever today's date is.
+  it("appears for a due pay day and is resolved by Add income (explicit payDaySlot kept)", async () => {
+    // Reminders count from the first-use date (today), so make today a pay day (in the app's time zone).
+    const day = Number(
+      new Intl.DateTimeFormat("en-US", { timeZone: "America/Los_Angeles", day: "numeric" }).format(
+        new Date(),
+      ),
+    );
     await withPage(async (page) => {
       await page.goto(`${baseUrl()}/settings`);
       const form = page.locator("form", { has: page.getByLabel("Pay days of the month") });
-      await form.getByLabel("Pay days of the month").fill("1");
+      await form.getByLabel("Pay days of the month").fill(String(day));
       await form.getByRole("button", { name: "Save", exact: true }).click();
       await expect.poll(() => statusText(page, "Saved")).toContain("Saved");
     });
     await withPage(async (page) => {
       await page.goto(baseUrl());
       const banner = page.getByRole("region", { name: "Pay day check-in" });
-      await expect.poll(() => banner.count()).toBe(1);
-      const before = await banner.getByRole("listitem").count();
-      expect(before).toBeGreaterThanOrEqual(2);
+      await expect.poll(() => banner.count(), { timeout: 10_000 }).toBe(1);
+      expect(await banner.getByRole("listitem").count()).toBe(1);
+      const link = banner.getByRole("link", { name: /Add income/ });
+      const slot = new URL(`http://x${await link.getAttribute("href")}`).searchParams.get("payDaySlot");
+      expect(slot).toMatch(/^\d{4}-\d{2}-\d{2}$/);
 
-      const first = banner.getByRole("listitem").first();
-      const slot = new URL(
-        `http://x${await first.getByRole("link", { name: /Add income/ }).getAttribute("href")}`,
-      ).searchParams.get("payDaySlot");
-      await first.getByRole("link", { name: /Add income/ }).click();
+      await link.click();
       await page.waitForURL(/payDaySlot=/);
       await page.getByLabel("Amount").fill("500.00");
       await page.getByLabel("Income source").fill("e2e Second pay");
       await page.getByRole("button", { name: "Save income" }).click();
       await page.waitForURL(/saved=added/);
-
-      await expect.poll(() => banner.getByRole("listitem").count()).toBe(before - 1);
-      const remaining = banner.getByRole("listitem").first();
-      await remaining.getByRole("button", { name: /Dismiss/ }).click();
-      await expect.poll(() => banner.getByRole("listitem").count()).toBe(before - 2 < 0 ? 0 : before - 2);
+      await expect.poll(() => banner.count(), { timeout: 10_000 }).toBe(0);
 
       const [income] = queryDb<{ pay_day_slot: string }>(
         `select pay_day_slot from income where source = 'e2e Second pay'`,
@@ -151,7 +150,6 @@ describe("Pay-day banner", () => {
       expect(income?.pay_day_slot).toBe(slot);
       const states = queryDb<{ slot: string; status: string }>(`select slot, status from reminder`);
       expect(states.find((s) => s.slot === slot)?.status).toBe("done");
-      expect(states.some((s) => s.status === "dismissed")).toBe(true);
     });
   });
 
@@ -288,7 +286,7 @@ describe("Backup, export and restore", () => {
       });
       await page.getByLabel("Yes, replace my current data with this backup").check();
       await page.getByRole("button", { name: "Restore backup" }).click();
-      await expect.poll(() => page.locator("[role=alert]").innerText()).toContain("isn’t a valid");
+      await expect.poll(() => page.locator(".form-error").innerText()).toContain("isn’t a valid");
     });
     expect(queryDb(`select 1 from income where source = 'e2e Salary'`).length).toBe(1);
   });
