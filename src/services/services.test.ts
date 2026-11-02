@@ -249,7 +249,7 @@ describe("bottles", () => {
   it("removeBottle: transfers balance, repoints categories, archives, new rule — atomically", () => {
     const d = makeDeps();
     unwrap(addIncome(d, incomeInput)); // P gets 10_000
-    unwrap(addExpense(d, { ...expenseInput, categoryId: "fun", amountMinor: 1000 })).expense; // P -1000
+    unwrap(addExpense(d, { ...expenseInput, categoryId: "fun", amountMinor: 1000 })); // P -1000
     expect(removeBottle(d, "P").ok).toBe(false); // needs a target
     expect(d.store.bottles.find((b) => b.id === "P")?.archivedAt).toBeNull();
     const r = unwrap(removeBottle(d, "P", "N"));
@@ -302,7 +302,7 @@ describe("reports", () => {
     const d = makeDeps({ today: "2026-12-20" });
     unwrap(addIncome(d, { ...incomeInput, date: "2026-11-10" })); // N +50_000 in Nov
     unwrap(addIncome(d, { ...incomeInput, date: "2026-12-10" })); // N +50_000 in Dec
-    unwrap(addExpense(d, { ...expenseInput, date: "2026-12-05", amountMinor: 7_000 })).expense; // N -7_000 in Dec
+    unwrap(addExpense(d, { ...expenseInput, date: "2026-12-05", amountMinor: 7_000 })); // N -7_000 in Dec
     const nov = (r: ReturnType<typeof getMonthlyReport>) =>
       r.bottleBalances.find((b) => b.bottleId === "N")?.balanceMinor;
     expect(nov(getMonthlyReport(d, "2026-11"))).toBe(50_000);

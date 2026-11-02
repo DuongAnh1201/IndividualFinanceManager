@@ -2,7 +2,7 @@ import { activeRuleVersion, allocateIncome } from "../domain/bottleSplit";
 import { validateExpense, type ExpenseInput } from "../domain/expense";
 import { validateIncome, type IncomeInput } from "../domain/income";
 import { completeReminder } from "../domain/reminders";
-import type { Expense, Id, Income } from "../domain/types";
+import type { Expense, Id, Income, IsoMonth, LivingLimitStatus } from "../domain/types";
 import {
   livingLimitStatusFor,
   livingSpent,
@@ -11,7 +11,6 @@ import {
   type RemainingAllowance,
 } from "../domain/livingLimit";
 import { monthOf } from "../domain/period";
-import type { IsoMonth, LivingLimitStatus } from "../domain/types";
 import { fail, notFound, ok, type FieldError, type Result } from "./result";
 import type { ServiceDeps } from "./ports";
 import { atomic, invalidateSnapshotsFrom, reopenSlotIfOrphaned } from "./support";

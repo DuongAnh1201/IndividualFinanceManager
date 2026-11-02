@@ -142,7 +142,7 @@ describe("payment methods", () => {
 describe("exchange rate & living limit", () => {
   it("setExchangeRate upserts per month/currency and invalidates from that month", () => {
     const d = makeDeps({ today: "2027-01-05" });
-    unwrap(addExpense(d, expenseInput)).expense; // Nov
+    unwrap(addExpense(d, expenseInput)); // Nov
     unwrap(addExpense(d, { ...expenseInput, date: "2026-12-05" }));
     snapshotClosedMonths(d);
     unwrap(setExchangeRate(d, { month: "2026-12", currency: "VND", rateToBase: 0.00004 }));
