@@ -16,8 +16,11 @@ import {
   runSubscriptionAutopost,
 } from "@/services/subscriptions";
 import type { FormState } from "@/ui/finance/types";
+import type { CurrencyCode } from "@/domain/types";
 import { withFinance } from "./_lib/finance";
 import { formFailure, readMoney, text, transactionInput } from "./_lib/form-data";
+import { spendingAlertParams } from "@/ui/spending-alert";
+import type { ExpenseSaved } from "@/services/transactions";
 
 function refreshFinance() {
   for (const path of ["/", "/transactions", "/subscriptions", "/bottles", "/reports"]) revalidatePath(path);
@@ -33,6 +36,8 @@ export async function saveTransaction(_previous: FormState, data: FormData): Pro
   if (!parsed.ok) return parsed.state;
   const id = text(data, "id");
   let state: FormState | undefined;
+  let savedExpense: ExpenseSaved | undefined;
+  let alertCurrency: CurrencyCode | undefined;
   try {
     state = withFinance((deps) => {
       if (kind === "income") {
@@ -51,14 +56,20 @@ export async function saveTransaction(_previous: FormState, data: FormData): Pro
         bottleId: text(data, "bottleId") || null,
       };
       const result = id ? editExpense(deps, id, input) : addExpense(deps, input);
-      return result.ok ? undefined : formFailure(result.errors);
+      if (!result.ok) return formFailure(result.errors);
+      savedExpense = result.value;
+      alertCurrency = deps.repos.settings.get().baseCurrency;
     });
   } catch {
     return storageError();
   }
   if (state) return state;
   refreshFinance();
-  redirect(`/transactions?saved=${id ? "updated" : "added"}`);
+  const params = new URLSearchParams({ saved: id ? "updated" : "added" });
+  if (savedExpense && alertCurrency) {
+    spendingAlertParams(savedExpense, alertCurrency).forEach((value, key) => params.set(key, value));
+  }
+  redirect(`/transactions?${params}`);
 }
 export async function deleteTransaction(_previous: FormState, data: FormData): Promise<FormState> {
   const kind = text(data, "kind");

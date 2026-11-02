@@ -6,6 +6,7 @@ import { deleteTransaction } from "@/app/actions";
 import { TransactionFilterForm, type TransactionFilters } from "@/ui/finance/filters";
 import { TransactionList } from "@/ui/finance/transaction-list";
 import type { TransactionRow } from "@/ui/finance/types";
+import { SpendingAlert, spendingAlertFromQuery } from "@/ui/spending-alert";
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Transactions" };
 export default async function Transactions({
@@ -80,6 +81,7 @@ export default async function Transactions({
     deleted: "Transaction deleted.",
   };
   const message = Object.hasOwn(messages, text("saved")) ? messages[text("saved")] : undefined;
+  const spendingAlert = message ? spendingAlertFromQuery(query) : null;
   return (
     <>
       <div className="page-heading">
@@ -92,11 +94,13 @@ export default async function Transactions({
           ＋ Add transaction
         </Link>
       </div>
-      {message && (
+      {spendingAlert ? (
+        <SpendingAlert alert={spendingAlert} />
+      ) : message ? (
         <p className="success-notice" role="status">
           {message}
         </p>
-      )}
+      ) : null}
       <TransactionFilterForm filters={filters} options={options} />
       {error ? (
         <p className="form-error" role="alert">

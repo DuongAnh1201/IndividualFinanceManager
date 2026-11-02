@@ -331,6 +331,25 @@ export default function SettingsPage() {
             },
           ]}
         />
+        <OperationForm
+          action={saveSetting}
+          operation="warningLevel"
+          label="Save warning level"
+          description="Penny becomes worried when spending reaches this share of your living limit."
+          fields={[
+            {
+              name: "limitWarningPercent",
+              label: "Warning level (%)",
+              type: "number",
+              value: String(settings.limitWarningPercent),
+              min: "50",
+              max: "99",
+              step: "1",
+              required: true,
+              hint: "A whole number from 50 to 99. Default: 80.",
+            },
+          ]}
+        />
       </section>
 
       <section id="data" className="card settings-section" aria-labelledby="data-h">

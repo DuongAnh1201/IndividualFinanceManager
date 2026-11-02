@@ -22,6 +22,16 @@ export async function saveSetting(_state: FormState, data: FormData): Promise<Fo
               .split(",")
               .map((v) => Number(v.trim())),
           });
+        case "warningLevel": {
+          const current = deps.repos.settings.get();
+          return admin.updateSettings(deps, {
+            baseCurrency: current.baseCurrency,
+            timezone: current.timezone,
+            weekStartsOn: current.weekStartsOn,
+            payDays: current.payDays,
+            limitWarningPercent: Number(text(data, "limitWarningPercent")),
+          });
+        }
         case "category": {
           const input = {
             name: text(data, "name"),

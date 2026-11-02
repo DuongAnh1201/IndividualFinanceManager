@@ -7,7 +7,10 @@ export function moodFor(status: LivingLimitStatus | null): PennyMood {
   return status.status === "over" ? "dizzy" : status.status === "warning" ? "worried" : "happy";
 }
 
-export function statusMessage(status: LivingLimitStatus | null): { title: string; detail: string } {
+export function statusMessage(
+  status: LivingLimitStatus | null,
+  warningPercent = 80,
+): { title: string; detail: string } {
   if (!status) {
     return {
       title: "No living limit yet",
@@ -17,7 +20,7 @@ export function statusMessage(status: LivingLimitStatus | null): { title: string
   if (status.status === "over")
     return { title: "Over your living limit", detail: "Let’s ease off the extras for now." };
   if (status.status === "warning")
-    return { title: "Getting close", detail: "You’ve used most of this month’s living limit." };
+    return { title: "Getting close", detail: `You’ve reached your ${warningPercent}% warning level.` };
   return { title: "Comfortably within your limit", detail: "Nice and steady. Keep it up!" };
 }
 

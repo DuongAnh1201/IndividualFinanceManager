@@ -4,6 +4,8 @@ import { notFound } from "next/navigation";
 import { saveTransaction } from "@/app/actions";
 import { withFinance, formOptions } from "@/app/_lib/finance";
 import { TransactionForm } from "@/ui/finance/transaction-form";
+import { AllowanceLine } from "@/ui/allowance-line";
+import { getDashboard } from "@/services/reports";
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Quick add" };
 export default async function QuickAdd({
@@ -15,10 +17,18 @@ export default async function QuickAdd({
   const slot = typeof query.payDaySlot === "string" ? query.payDaySlot : undefined;
   const kind = query.kind === "income" || slot ? "income" : "expense";
   const id = typeof query.id === "string" ? query.id : undefined;
-  const { options, existing } = withFinance((deps) => ({
-    options: formOptions(deps),
-    existing: id ? (kind === "income" ? deps.repos.incomes.get(id) : deps.repos.expenses.get(id)) : undefined,
-  }));
+  const { options, existing, allowance } = withFinance((deps) => {
+    const dashboard = getDashboard(deps);
+    return {
+      options: formOptions(deps),
+      existing: id
+        ? kind === "income"
+          ? deps.repos.incomes.get(id)
+          : deps.repos.expenses.get(id)
+        : undefined,
+      allowance: dashboard.allowance,
+    };
+  });
   if (id && !existing) notFound();
   return (
     <>
@@ -45,6 +55,11 @@ export default async function QuickAdd({
             Income
           </Link>
         </nav>
+      )}
+      {kind === "expense" && (
+        <div className="quick-allowance" aria-label="Left to spend this month">
+          <AllowanceLine allowance={allowance} currency={options.baseCurrency} compact />
+        </div>
       )}
       <TransactionForm
         key={`${kind}-${id ?? "new"}-${slot ?? ""}`}
