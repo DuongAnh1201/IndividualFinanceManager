@@ -14,6 +14,7 @@ const bottles = [
   ["Play", "bun"],
   ["Give", "bee-kind"],
 ] as const;
+const colors = ["#7C8C78", "#A3907A", "#8A9BAE", "#B59AA6", "#C2AE7E", "#8FA89C", "#A88C8C"] as const;
 const categories = [
   ["Subscriptions", "subscription", false, 0],
   ["Groceries/Daily", "daily", true, 0],
@@ -59,7 +60,7 @@ export function seedDatabase(db: ReturnType<typeof openDatabase>["db"], timezone
           kind,
           counts_toward_living_limit,
           default_bottle_id: uuid(bottleIndex + 1),
-          color: "#7C8C78",
+          color: colors[i % colors.length]!,
           mascot: bottles[bottleIndex][1],
         })
         .onConflictDoNothing()
@@ -67,7 +68,11 @@ export function seedDatabase(db: ReturnType<typeof openDatabase>["db"], timezone
     });
     (["cash", "debit", "credit"] as const).forEach((type, i) => {
       tx.insert(s.paymentMethod)
-        .values({ id: uuid(300 + i), name: type.charAt(0).toUpperCase() + type.slice(1), type })
+        .values({
+          id: uuid(300 + i),
+          name: { cash: "Cash", debit: "Debit card", credit: "Credit card" }[type],
+          type,
+        })
         .onConflictDoNothing()
         .run();
     });
@@ -78,7 +83,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const { db, sqlite } = openDatabase();
   try {
     migrate(db, { migrationsFolder: fileURLToPath(new URL("./migrations", import.meta.url)) });
-    seedDatabase(db);
+    seedDatabase(db, Intl.DateTimeFormat().resolvedOptions().timeZone);
   } finally {
     sqlite.close();
   }
