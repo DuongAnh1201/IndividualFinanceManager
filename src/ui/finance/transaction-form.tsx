@@ -47,8 +47,8 @@ export function TransactionForm({
       )}
       {expense?.source === "subscription" && (
         <div className="inline-notice">
-          You’re editing a posted charge. Changes here affect this transaction; the subscription’s future
-          price stays the same.
+          You’re editing a posted charge. Its date and category stay locked. Other changes affect this
+          transaction; the subscription’s future price stays the same.
         </div>
       )}
       <div className="form-grid">
@@ -100,10 +100,14 @@ export function TransactionForm({
           </Field>
         ) : (
           <>
+            {expense?.source === "subscription" && (
+              <input type="hidden" name="categoryId" value={expense.categoryId} />
+            )}
             <Field name="categoryId" label="Category" state={state}>
               <select
                 id="categoryId"
                 name="categoryId"
+                disabled={expense?.source === "subscription"}
                 required
                 {...bind("categoryId")}
                 {...fieldA11y("categoryId", state)}
