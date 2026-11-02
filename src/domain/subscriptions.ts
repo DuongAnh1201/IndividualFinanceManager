@@ -1,5 +1,14 @@
 import { clampDay, monthOf, parseDate } from "./period";
-import type { Category, Expense, Id, IsoDate, IsoMonth, IsoTimestamp, Subscription } from "./types";
+import type {
+  Category,
+  CurrencyCode,
+  Expense,
+  Id,
+  IsoDate,
+  IsoMonth,
+  IsoTimestamp,
+  Subscription,
+} from "./types";
 
 /** Idempotency key for a posted charge: one expense per (subscription, billing month). */
 export function chargeKey(subscriptionId: Id, billingMonth: IsoMonth): string {
@@ -105,4 +114,48 @@ export function changeSubscriptionPrice(
     throw new RangeError("amountMinor must be a positive integer");
   }
   return { ...sub, amountMinor, updatedAt: now };
+}
+
+/**
+ * Next charge date strictly after `today` (today's charge, if any, is already owed/posted),
+ * honouring startDate and endDate. Null when the subscription has ended or never charges again.
+ */
+export function nextChargeDate(sub: Subscription, today: IsoDate): IsoDate | null {
+  const t = parseDate(today);
+  let year = t.year;
+  let month = t.month;
+  // Billing day is always found within 2 months; 3 iterations also covers startDate in the near future.
+  for (let i = 0; i < 24; i++) {
+    const chargeDate = clampDay(year, month, sub.billingDay);
+    if (sub.endDate !== null && chargeDate > sub.endDate) return null;
+    if (chargeDate > today && chargeDate >= sub.startDate) return chargeDate;
+    month += 1;
+    if (month > 12) {
+      month = 1;
+      year += 1;
+    }
+  }
+  return null;
+}
+
+/** Subscriptions not ended as of `today` (endDate null or ≥ today). */
+export function activeSubscriptions(subs: readonly Subscription[], today: IsoDate): Subscription[] {
+  return subs.filter((s) => s.endDate === null || s.endDate >= today);
+}
+
+/**
+ * Monthly cost of active subscriptions, summed per original currency (no conversion,
+ * so no FX rate is needed; sorted by currency code).
+ */
+export function monthlyTotalsByCurrency(
+  subs: readonly Subscription[],
+  today: IsoDate,
+): { currency: CurrencyCode; amountMinor: number }[] {
+  const totals = new Map<CurrencyCode, number>();
+  for (const s of activeSubscriptions(subs, today)) {
+    totals.set(s.currency, (totals.get(s.currency) ?? 0) + s.amountMinor);
+  }
+  return [...totals.entries()]
+    .sort(([a], [b]) => (a < b ? -1 : 1))
+    .map(([currency, amountMinor]) => ({ currency, amountMinor }));
 }
