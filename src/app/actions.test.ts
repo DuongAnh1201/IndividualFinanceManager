@@ -37,6 +37,28 @@ vi.mock("next/navigation", () => ({
   },
 }));
 import { deleteTransaction, endSubscriptionAction, saveSubscription, saveTransaction } from "./actions";
+const expenseSaved = (overrides: Record<string, unknown> = {}) => ({
+  expense: {
+    id: "expense-1",
+    date: "2026-11-02",
+    amountMinor: 900,
+    currency: "USD",
+    fxRateToBase: null,
+    categoryId: "category-1",
+    paymentMethodId: "payment-1",
+    bottleId: null,
+    note: null,
+    source: "manual",
+    subscriptionId: null,
+    billingMonth: null,
+    createdAt: "2026-11-02T12:00:00.000Z",
+    updatedAt: "2026-11-02T12:00:00.000Z",
+  },
+  crossing: null,
+  status: null,
+  allowance: null,
+  ...overrides,
+});
 const form = (values: Record<string, string>) => {
   const data = new FormData();
   Object.entries(values).forEach(([key, value]) => data.set(key, value));
@@ -56,6 +78,8 @@ beforeEach(() => {
     "removeSubscription",
   ] as const)
     fake[key].mockReturnValue({ ok: true, value: {} });
+  fake.addExpense.mockReturnValue({ ok: true, value: expenseSaved() });
+  fake.editExpense.mockReturnValue({ ok: true, value: expenseSaved() });
   fake.runSubscriptionAutopost.mockReturnValue([]);
 });
 describe("finance action handoff", () => {
@@ -121,6 +145,46 @@ describe("finance action handoff", () => {
     ).rejects.toThrow("REDIRECT:/transactions?saved=updated");
     expect(fake.editExpense).toHaveBeenCalledWith(fake.deps, "posted-1", expect.any(Object));
     expect(fake.addExpense).not.toHaveBeenCalled();
+  });
+  it("carries a warning crossing into the saved confirmation", async () => {
+    fake.addExpense.mockReturnValue({
+      ok: true,
+      value: expenseSaved({
+        crossing: "warning",
+        status: {
+          month: "2026-11",
+          limitMinor: 50_000,
+          spentMinor: 43_000,
+          ratio: 0.86,
+          status: "warning",
+        },
+        allowance: { leftMinor: 7_000, daysLeft: 28, perDayMinor: 250 },
+      }),
+    });
+    await expect(
+      saveTransaction({}, form({ kind: "expense", currency: "USD", amount: "9" })),
+    ).rejects.toThrow(
+      "REDIRECT:/transactions?saved=added&crossing=warning&percent=86&spent=43000&limit=50000&currency=USD",
+    );
+  });
+  it("carries an over crossing into the saved confirmation", async () => {
+    fake.editExpense.mockReturnValue({
+      ok: true,
+      value: expenseSaved({
+        crossing: "over",
+        status: {
+          month: "2026-11",
+          limitMinor: 50_000,
+          spentMinor: 52_000,
+          ratio: 1.04,
+          status: "over",
+        },
+        allowance: { leftMinor: -2_000, daysLeft: 28, perDayMinor: 0 },
+      }),
+    });
+    await expect(
+      saveTransaction({}, form({ id: "expense-1", kind: "expense", currency: "USD", amount: "9" })),
+    ).rejects.toThrow("REDIRECT:/transactions?saved=updated&crossing=over&over=2000&currency=USD");
   });
   it("removes a subscription with service-clock today, ignoring a client end date", async () => {
     await expect(endSubscriptionAction({}, form({ id: "sub-1", endDate: "2099-01-01" }))).rejects.toThrow(

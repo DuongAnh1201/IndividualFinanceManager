@@ -18,13 +18,15 @@ export function LivingLimitCard({
   currency,
   incompleteCount,
   allowance,
+  warningPercent = 80,
 }: {
   status: LivingLimitStatus | null;
   currency: CurrencyCode;
   incompleteCount: number;
   allowance?: AllowanceView | null;
+  warningPercent?: number;
 }) {
-  const message = statusMessage(status);
+  const message = statusMessage(status, warningPercent);
   return (
     <section className="card dash-card living-card" aria-labelledby="living-heading">
       <div className="living-head">

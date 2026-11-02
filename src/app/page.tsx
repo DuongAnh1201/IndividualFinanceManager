@@ -71,6 +71,8 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
           status={dashboard.livingLimit}
           currency={currency}
           incompleteCount={dashboard.livingMissingRateExpenseIds.length}
+          allowance={dashboard.allowance}
+          warningPercent={dashboard.limitWarningPercent}
         />
         <SpendCard
           totalMinor={report.totalSpendMinor}

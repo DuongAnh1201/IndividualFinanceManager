@@ -21,7 +21,10 @@ describe("dashboard model", () => {
   it("has a text message for every status (not mood alone)", () => {
     expect(statusMessage(null).title).toMatch(/no living limit/i);
     expect(statusMessage(status("ok", 0.1)).title).toMatch(/within/i);
-    expect(statusMessage(status("warning", 0.9)).title).toMatch(/close/i);
+    expect(statusMessage(status("warning", 0.9), 75)).toEqual({
+      title: "Getting close",
+      detail: "You’ve reached your 75% warning level.",
+    });
     expect(statusMessage(status("over", 1.1)).title).toMatch(/over/i);
   });
 
