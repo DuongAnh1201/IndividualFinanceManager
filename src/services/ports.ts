@@ -32,6 +32,8 @@ export interface Repositories {
   expenses: {
     list(): Expense[];
     insert(expense: Expense): void;
+    get(id: Id): Expense | undefined;
+    update(expense: Expense): void;
     insertMany(expenses: Expense[]): void;
     /** `subscriptionId|billingMonth` keys of posted subscription charges (see chargeKey). */
     postedChargeKeys(): Set<string>;
@@ -54,10 +56,16 @@ export interface Repositories {
     replaceForIncome(incomeId: Id, allocations: BottleAllocation[]): void;
   };
   transfers: { list(): BottleTransfer[]; insert(transfer: BottleTransfer): void };
-  livingLimits: { get(month: IsoMonth): LivingLimit | undefined; upsert(limit: LivingLimit): void };
+  livingLimits: {
+    list(): LivingLimit[];
+    get(month: IsoMonth): LivingLimit | undefined;
+    upsert(limit: LivingLimit): void;
+  };
   exchangeRates: { list(): ExchangeRate[] };
   reminders: { list(): Reminder[]; upsert(reminder: Reminder): void };
   monthlyReports: {
+    /** Months that already have a snapshot. */
+    months(): IsoMonth[];
     get(month: IsoMonth): MonthlyReport | undefined;
     upsert(month: IsoMonth, report: MonthlyReport, generatedAt: string): void;
   };
