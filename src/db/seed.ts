@@ -1,7 +1,7 @@
 import { pathToFileURL } from "node:url";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
-import { fileURLToPath } from "node:url";
 import { openDatabase } from "./client";
+import { migrationsDirectory } from "./config";
 import * as s from "./schema";
 
 // Stable UUIDs make repeated seeds safe without overwriting user edits.
@@ -82,7 +82,7 @@ export function seedDatabase(db: ReturnType<typeof openDatabase>["db"], timezone
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const { db, sqlite } = openDatabase();
   try {
-    migrate(db, { migrationsFolder: fileURLToPath(new URL("./migrations", import.meta.url)) });
+    migrate(db, { migrationsFolder: migrationsDirectory() });
     seedDatabase(db, Intl.DateTimeFormat().resolvedOptions().timeZone);
   } finally {
     sqlite.close();
