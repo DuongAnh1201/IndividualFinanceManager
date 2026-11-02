@@ -1,5 +1,5 @@
 import { renameBottle as renameBottleRule } from "../domain/bottleRules";
-import { suggestedLimit, type SuggestedLimit } from "../domain/livingLimit";
+import { isValidWarningPercent, suggestedLimit, type SuggestedLimit } from "../domain/livingLimit";
 import { isCurrencyCode } from "../domain/money";
 import { parseDate } from "../domain/period";
 import { validatePayDays } from "../domain/reminders";
@@ -47,6 +47,8 @@ export interface SettingsInput {
   payDays: number[];
   weekStartsOn: number;
   timezone: string;
+  /** Integer 50–99 (BR-6); omitted = keep the stored value. */
+  limitWarningPercent?: number;
 }
 
 /** Update settings. Changing the base currency or week start makes every saved report stale, so snapshots are dropped. */
@@ -66,6 +68,14 @@ export function updateSettings(deps: ServiceDeps, input: SettingsInput): Result<
     }
     if (!validTimezone(input.timezone))
       errors.push(err("invalid-timezone", "timezone", "Unknown time zone."));
+    if (input.limitWarningPercent !== undefined && !isValidWarningPercent(input.limitWarningPercent))
+      errors.push(
+        err(
+          "invalid-warning-percent",
+          "limitWarningPercent",
+          "Warning level must be a whole number from 50 to 99.",
+        ),
+      );
     if (errors.length > 0 || !isCurrencyCode(input.baseCurrency)) return fail(errors);
 
     const before = repos.settings.get();
@@ -75,9 +85,14 @@ export function updateSettings(deps: ServiceDeps, input: SettingsInput): Result<
       payDays: [...new Set(input.payDays)].sort((a, b) => a - b),
       weekStartsOn: input.weekStartsOn as WeekStart,
       timezone: input.timezone,
+      limitWarningPercent: input.limitWarningPercent ?? before.limitWarningPercent,
     };
     repos.settings.update(settings);
-    if (before.baseCurrency !== settings.baseCurrency || before.weekStartsOn !== settings.weekStartsOn) {
+    if (
+      before.baseCurrency !== settings.baseCurrency ||
+      before.weekStartsOn !== settings.weekStartsOn ||
+      before.limitWarningPercent !== settings.limitWarningPercent
+    ) {
       invalidateSnapshotsFrom(deps, [ALL_MONTHS]);
     }
     return ok(settings);

@@ -64,6 +64,7 @@ export function seedStore(): Store {
       payDays: [10, 25],
       weekStartsOn: 1,
       timezone: "UTC",
+      limitWarningPercent: 80,
     },
     paymentMethods: [{ id: "pm1", name: "Visa", type: "credit", last4: null, archivedAt: null }],
     categories: [

@@ -166,12 +166,12 @@ export interface LivingLimitRow extends RowBase {
   status: LivingLimitStatusKind | null;
 }
 
-export function livingLimitRows(series: ComparisonSeries): LivingLimitRow[] {
+export function livingLimitRows(series: ComparisonSeries, warningPercent?: number): LivingLimitRow[] {
   return series.points.map((p) => {
     const status =
       p.livingLimitMinor === null
         ? null
-        : livingLimitStatus(p.period.id, p.livingLimitMinor, p.livingSpentMinor);
+        : livingLimitStatus(p.period.id, p.livingLimitMinor, p.livingSpentMinor, warningPercent);
     return {
       ...rowBase(p),
       limitMinor: p.livingLimitMinor,

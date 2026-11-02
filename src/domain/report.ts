@@ -40,6 +40,8 @@ export interface ReportData {
   livingLimits: readonly LivingLimit[];
   /** Bottle balances as of now/month end (derived by the bottle-balance rule); passed through to the report. */
   bottleBalances: readonly BottleBalance[];
+  /** Living-limit warning level (BR-6); default 80. */
+  limitWarningPercent?: number;
 }
 
 interface Converted {
@@ -180,7 +182,7 @@ export function buildMonthlyReport(month: IsoMonth, data: ReportData): MonthlyRe
     incomeTotalMinor: income.totalMinor,
     bottleAllocations,
     bottleBalances: [...data.bottleBalances],
-    livingLimit: livingLimitStatusFor(month, data.livingLimits, spendTotal(living)),
+    livingLimit: livingLimitStatusFor(month, data.livingLimits, spendTotal(living), data.limitWarningPercent),
     topExpenses,
     deltaVsPreviousMinor,
     missingRateExpenseIds: missing,

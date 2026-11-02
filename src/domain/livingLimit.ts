@@ -1,5 +1,5 @@
 import { toBaseMinor } from "./currency";
-import { monthOf } from "./period";
+import { daysInMonth, monthOf, parseDate } from "./period";
 import type {
   BottleAllocation,
   Category,
@@ -8,13 +8,26 @@ import type {
   Expense,
   Id,
   Income,
+  IsoDate,
   IsoMonth,
   LivingLimit,
   LivingLimitStatus,
 } from "./types";
 
-/** BR-6: ok < 80 % ≤ warning < 100 % ≤ over. */
-export const WARNING_THRESHOLD = { numerator: 4, denominator: 5 } as const;
+/** BR-6: ok < W % ≤ warning < 100 % ≤ over, W = settings.limitWarningPercent. */
+export const DEFAULT_WARNING_PERCENT = 80;
+export const MIN_WARNING_PERCENT = 50;
+export const MAX_WARNING_PERCENT = 99;
+
+/** True for an integer warning level in 50–99. */
+export function isValidWarningPercent(value: unknown): value is number {
+  return (
+    typeof value === "number" &&
+    Number.isInteger(value) &&
+    value >= MIN_WARNING_PERCENT &&
+    value <= MAX_WARNING_PERCENT
+  );
+}
 
 export interface LivingSpent {
   /** Base-currency minor units. */
@@ -48,7 +61,7 @@ export function livingSpent(
 }
 
 /**
- * Status of spend vs limit. Exactly 80 % is `warning`, exactly 100 % is `over`.
+ * Status of spend vs limit. Exactly W % (default 80) is `warning`, exactly 100 % is `over`.
  * limit 0: ratio 0 and `ok` if nothing spent, else Infinity and `over` (see types.ts).
  * Compared with integer math to avoid float edge cases.
  */
@@ -56,16 +69,19 @@ export function livingLimitStatus(
   month: IsoMonth,
   limitMinor: number,
   spentMinor: number,
+  warningPercent: number = DEFAULT_WARNING_PERCENT,
 ): LivingLimitStatus {
+  if (!isValidWarningPercent(warningPercent)) {
+    throw new RangeError(`warningPercent must be an integer 50–99: ${warningPercent}`);
+  }
   if (!Number.isSafeInteger(limitMinor) || limitMinor < 0) {
     throw new RangeError(`limitMinor must be a non-negative integer: ${limitMinor}`);
   }
   if (!Number.isSafeInteger(spentMinor)) throw new RangeError(`spentMinor must be an integer: ${spentMinor}`);
-  const { numerator, denominator } = WARNING_THRESHOLD;
   const spent = Math.max(spentMinor, 0);
   let status: LivingLimitStatus["status"];
   if (spent >= limitMinor && spent > 0) status = "over";
-  else if (spent * denominator >= limitMinor * numerator && spent > 0) status = "warning";
+  else if (spent * 100 >= limitMinor * warningPercent && spent > 0) status = "warning";
   else status = "ok";
   const ratio = limitMinor === 0 ? (spent === 0 ? 0 : Infinity) : spent / limitMinor;
   return { month, limitMinor, spentMinor, ratio, status };
@@ -94,9 +110,42 @@ export function livingLimitStatusFor(
   month: IsoMonth,
   limits: readonly LivingLimit[],
   spentMinor: number,
+  warningPercent: number = DEFAULT_WARNING_PERCENT,
 ): LivingLimitStatus | null {
   const limit = resolveLimit(month, limits);
-  return limit ? livingLimitStatus(month, limit.limitMinor, spentMinor) : null;
+  return limit ? livingLimitStatus(month, limit.limitMinor, spentMinor, warningPercent) : null;
+}
+
+/**
+ * Alert for a write, from the month's status before and after (BR-6): `over` if it moved
+ * into over, `warning` if it moved from ok into warning, else null (going down, staying
+ * level, no limit, or a different month).
+ */
+export function limitCrossing(
+  before: LivingLimitStatus | null,
+  after: LivingLimitStatus | null,
+): "warning" | "over" | null {
+  if (!before || !after || before.month !== after.month) return null;
+  if (after.status === "over" && before.status !== "over") return "over";
+  if (after.status === "warning" && before.status === "ok") return "warning";
+  return null;
+}
+
+export interface RemainingAllowance {
+  /** limit − spent; negative when over. */
+  leftMinor: number;
+  /** Days from today through month end, inclusive; null unless `today` is in the status's month. */
+  daysLeft: number | null;
+  /** floor(left / daysLeft) while left > 0, else 0; null unless the current month. */
+  perDayMinor: number | null;
+}
+
+export function remainingAllowance(status: LivingLimitStatus, today: IsoDate): RemainingAllowance {
+  const leftMinor = status.limitMinor - status.spentMinor;
+  if (monthOf(today) !== status.month) return { leftMinor, daysLeft: null, perDayMinor: null };
+  const { year, month, day } = parseDate(today);
+  const daysLeft = daysInMonth(year, month) - day + 1;
+  return { leftMinor, daysLeft, perDayMinor: leftMinor > 0 ? Math.floor(leftMinor / daysLeft) : 0 };
 }
 
 export interface SuggestedLimit {

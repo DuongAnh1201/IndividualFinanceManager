@@ -69,7 +69,7 @@ describe("updateSettings", () => {
   });
   it("changing base currency drops saved snapshots; pay days alone does not", () => {
     const d = makeDeps({ today: "2027-01-05" });
-    unwrap(addExpense(d, expenseInput));
+    unwrap(addExpense(d, expenseInput)).expense;
     snapshotClosedMonths(d);
     unwrap(updateSettings(d, { ...ok, baseCurrency: "USD", weekStartsOn: 1, payDays: [5] }));
     expect(d.store.reports.size).toBe(2); // Nov + Dec snapshots survive
@@ -100,7 +100,7 @@ describe("categories", () => {
   });
   it("update keeps archivedAt, allows own name, drops snapshots; archive is soft", () => {
     const d = makeDeps({ today: "2027-01-05" });
-    unwrap(addExpense(d, expenseInput));
+    unwrap(addExpense(d, expenseInput)).expense;
     snapshotClosedMonths(d);
     const c = unwrap(
       updateCategory(d, "food", { ...catInput, name: "food", countsTowardLivingLimit: false }),
@@ -142,8 +142,8 @@ describe("payment methods", () => {
 describe("exchange rate & living limit", () => {
   it("setExchangeRate upserts per month/currency and invalidates from that month", () => {
     const d = makeDeps({ today: "2027-01-05" });
-    unwrap(addExpense(d, expenseInput)); // Nov
-    unwrap(addExpense(d, { ...expenseInput, date: "2026-12-05" }));
+    unwrap(addExpense(d, expenseInput)).expense; // Nov
+    unwrap(addExpense(d, { ...expenseInput, date: "2026-12-05" })).expense;
     snapshotClosedMonths(d);
     unwrap(setExchangeRate(d, { month: "2026-12", currency: "VND", rateToBase: 0.00004 }));
     expect([...d.store.reports.keys()]).toEqual(["2026-11"]);
