@@ -157,6 +157,10 @@ first use. It is set once by `initializeFirstUse` after migrations/seed and neve
 (`settings.update` ignores any incoming value). Existing installs are backfilled with their
 earliest recorded income/expense/reminder date. Pay-day reminders start counting from it.
 
+`settings.limit_warning_percent` (`Settings.limitWarningPercent`) defaults to 80 and is
+constrained to an integer from 50 through 99. Migration `0003` adds it to existing databases;
+strict-prefix restores migrate the staged copy forward and receive the same default.
+
 `restoreDatabase` accepts a backup whose migration history is identical to this app's
 (`current`) or a **strict prefix** of it (`older`). An older backup is migrated forward on the
 _staged copy_ (the source file and the live DB are never touched), `first_used_on` is

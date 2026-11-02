@@ -247,10 +247,14 @@ describe("repositories", () => {
       payDays: [5, 20],
       weekStartsOn: 0 as const,
       timezone: "Asia/Ho_Chi_Minh",
+      limitWarningPercent: 75,
     };
     expect(r.settings.update(settings)).toEqual(settings);
     expect(() => r.settings.update({ ...settings, payDays: [32] })).toThrow();
     expect(() => r.settings.update({ ...settings, timezone: "invalid-zone" })).toThrow();
+    expect(() => r.settings.update({ ...settings, limitWarningPercent: 49 })).toThrow();
+    expect(() => r.settings.update({ ...settings, limitWarningPercent: 100 })).toThrow();
+    expect(() => r.settings.update({ ...settings, limitWarningPercent: 80.5 })).toThrow();
     r.exchangeRates.upsert({ month: "2026-11", currency: "VND", rateToBase: 0.00004 });
     r.exchangeRates.upsert({ month: "2026-11", currency: "VND", rateToBase: 0.00005 });
     expect(r.exchangeRates.get("2026-11", "VND")?.rateToBase).toBe(0.00005);

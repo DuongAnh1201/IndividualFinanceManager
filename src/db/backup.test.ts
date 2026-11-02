@@ -275,6 +275,36 @@ function oldVersionBackup(file: string, count: number, withData: boolean): void 
 }
 
 describe("restoring older-version backups", () => {
+  it("forward-migrates a pre-0003 backup with the default warning percent and round-trips updates", async () => {
+    getRepositories();
+    const oldFile = join(directory, "before-warning-percent.db");
+    oldVersionBackup(oldFile, 3, false);
+
+    const source = new Database(oldFile, { readonly: true });
+    expect(source.prepare("SELECT COUNT(*) AS n FROM __drizzle_migrations").get()).toEqual({ n: 3 });
+    expect(() => source.prepare("SELECT limit_warning_percent FROM settings").get()).toThrow();
+    source.close();
+
+    await restoreDatabase(oldFile);
+    expect(getRepositories().settings.get().limitWarningPercent).toBe(80);
+    const updated = getRepositories().settings.update({
+      ...getRepositories().settings.get(),
+      limitWarningPercent: 72,
+    });
+    expect(updated.limitWarningPercent).toBe(72);
+    const roundTrip = await backupDatabase(join(directory, "warning-percent-round-trip.db"));
+
+    getRepositories().settings.update({
+      ...getRepositories().settings.get(),
+      limitWarningPercent: 90,
+    });
+    await restoreDatabase(roundTrip);
+    expect(getRepositories().settings.get().limitWarningPercent).toBe(72);
+    expect(() => getDb().$client.prepare("UPDATE settings SET limit_warning_percent = 49").run()).toThrow();
+    expect(() => getDb().$client.prepare("UPDATE settings SET limit_warning_percent = 100").run()).toThrow();
+    validateBackup(path);
+  });
+
   it("migrates a strict-prefix backup forward on the staged copy and backfills first use from its data", async () => {
     getRepositories(); // live DB at the current version
     const oldFile = join(directory, "old.db");
