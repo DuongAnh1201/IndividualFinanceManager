@@ -39,7 +39,7 @@ Each phase ends with a working, demoable app.
 - claude3: end-of-month snapshot job.
 - All: bug fixes, accessibility pass, empty states with mascots.
 
-## Phase 4.5 — In-app spending alerts ⏳ in progress
+## Phase 4.5 — In-app spending alerts ✅ done (#61/#66, #62/#67, #63/#68)
 - claude3: BR-6 configurable warning level, `limitCrossing`, `remainingAllowance`; expense services report the crossing.
 - codex2: `settings.limit_warning_percent` migration + repository + backup compatibility.
 - codex1: alert on expense save, left-to-spend lines, warning level in Settings.
@@ -54,5 +54,5 @@ Each phase ends with a working, demoable app.
 ## Status (2026-11-02)
 The web app is feature-complete for phases 0–4: Quick add, Transactions, Subscriptions (auto-post), Income & Bottles (5:1:1:1:1:1, editable),
 Settings (categories, payment methods, FX, pay days, living limit), Dashboard, Reports (week/month/year, last 5), backup/restore/CSV, PWA and pay-day banner.
-Test coverage: unit + service integration (`npm run check`) and browser flows (`npm run test:e2e`). Remaining: phase 4.5 (in-app spending alerts), the notifications & email milestone, then phase 5.
+Test coverage: unit + service integration (`npm run check`) and browser flows (`npm run test:e2e`). Phase 4.5 (in-app spending alerts) is done. Remaining: the notifications & email milestone (#64, #65; waits for Tom), then phase 5.
 
