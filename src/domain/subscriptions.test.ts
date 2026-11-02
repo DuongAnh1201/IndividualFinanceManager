@@ -3,6 +3,8 @@ import {
   changeSubscriptionPrice,
   chargeKey,
   endSubscription,
+  monthlyTotalsByCurrency,
+  nextChargeDate,
   owedCharges,
   postDueSubscriptionExpenses,
 } from "./subscriptions";
@@ -160,5 +162,39 @@ describe("subscription edits", () => {
     expect(() => changeSubscriptionPrice(sub(), 0, NOW)).toThrow(RangeError);
     expect(() => changeSubscriptionPrice(sub(), 1.5, NOW)).toThrow(RangeError);
     expect(() => endSubscription(sub(), "2026-13-01", NOW)).toThrow(RangeError);
+  });
+});
+
+describe("nextChargeDate", () => {
+  it("is the next billing day after today (today's charge is already owed)", () => {
+    expect(nextChargeDate(sub(), "2026-03-10")).toBe("2026-03-15");
+    expect(nextChargeDate(sub(), "2026-03-15")).toBe("2026-04-15");
+    expect(nextChargeDate(sub(), "2026-12-20")).toBe("2027-01-15");
+  });
+  it("clamps to month end", () => {
+    expect(nextChargeDate(sub({ billingDay: 31 }), "2026-01-31")).toBe("2026-02-28");
+  });
+  it("waits for a future start date", () => {
+    expect(nextChargeDate(sub({ startDate: "2027-02-20" }), "2026-11-01")).toBe("2027-03-15");
+  });
+  it("is null once ended", () => {
+    expect(nextChargeDate(sub({ endDate: "2026-03-20" }), "2026-03-16")).toBeNull();
+    expect(nextChargeDate(sub({ endDate: "2026-04-15" }), "2026-03-16")).toBe("2026-04-15");
+  });
+});
+
+describe("monthlyTotalsByCurrency", () => {
+  it("sums active subscriptions per original currency", () => {
+    const subs = [
+      sub({ amountMinor: 1000 }),
+      sub({ id: "b", amountMinor: 500 }),
+      sub({ id: "c", currency: "VND", amountMinor: 99000 }),
+      sub({ id: "d", amountMinor: 7777, endDate: "2026-01-01" }),
+    ];
+    expect(monthlyTotalsByCurrency(subs, "2026-03-01")).toEqual([
+      { currency: "USD", amountMinor: 1500 },
+      { currency: "VND", amountMinor: 99000 },
+    ]);
+    expect(monthlyTotalsByCurrency([], "2026-03-01")).toEqual([]);
   });
 });
