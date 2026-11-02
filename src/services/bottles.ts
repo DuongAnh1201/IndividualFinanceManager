@@ -8,6 +8,7 @@ import { activeRuleVersion } from "../domain/bottleSplit";
 import type { BottleRatio, BottleRuleVersion, Id, Income } from "../domain/types";
 import { fail, notFound, ok, type FieldError, type Result } from "./result";
 import type { ServiceDeps } from "./ports";
+import { atomic, invalidateSnapshotsFrom } from "./support";
 
 function bad(code: string, field: string, message: string): Result<never> {
   return fail([{ code, field, message }]);
@@ -20,7 +21,7 @@ export function editBottleRules(
   note?: string | null,
 ): Result<BottleRuleVersion, FieldError> {
   const { repos, clock } = deps;
-  return repos.transaction(() => {
+  return atomic(deps, () => {
     const bottles = repos.bottles.list();
     const active = new Set(bottles.filter((b) => b.archivedAt === null).map((b) => b.id));
     if (ratios.some((r) => !active.has(r.bottleId))) {
@@ -40,7 +41,7 @@ export function editBottleRules(
 /** BR-4: manual re-split of one past income with the rule active now. */
 export function resplitIncome(deps: ServiceDeps, incomeId: Id): Result<Income, FieldError> {
   const { repos, clock } = deps;
-  return repos.transaction(() => {
+  return atomic(deps, () => {
     const income = repos.incomes.get(incomeId);
     if (!income) return notFound("Income");
     const rule = activeRuleVersion(repos.ruleVersions.list(), clock.now());
@@ -48,6 +49,7 @@ export function resplitIncome(deps: ServiceDeps, incomeId: Id): Result<Income, F
     const out = resplitRule(income, rule, clock.newId);
     repos.incomes.update(out.income);
     repos.allocations.replaceForIncome(income.id, out.allocations);
+    invalidateSnapshotsFrom(deps, [income.date]);
     return ok(out.income);
   });
 }
@@ -62,13 +64,13 @@ export function removeBottle(
   targetBottleId?: Id,
 ): Result<{ transferred: boolean }, FieldError> {
   const { repos, clock } = deps;
-  return repos.transaction(() => {
+  return atomic(deps, () => {
     const bottles = repos.bottles.list();
     const settings = repos.settings.get();
     const now = clock.now();
     const current = activeRuleVersion(repos.ruleVersions.list(), now);
     if (!current) return bad("no-rule", "bottleRuleVersionId", "No bottle rule is active.");
-    const { balances } = bottleBalances(
+    const { balances, missingRate } = bottleBalances(
       bottles,
       repos.allocations.list(),
       repos.incomes.list(),
@@ -77,6 +79,15 @@ export function removeBottle(
       settings.baseCurrency,
       repos.exchangeRates.list(),
     );
+    const missing = [...missingRate.incomeIds, ...missingRate.transferIds, ...missingRate.expenseIds];
+    if (missing.length > 0) {
+      // Never move a balance we could not fully compute: Tom adds the missing rate first.
+      return bad(
+        "missing-rate",
+        "rates",
+        `Add the missing exchange rate first. Unconverted rows: ${missing.join(", ")}`,
+      );
+    }
     const balance = balances.find((b) => b.bottleId === bottleId);
     if (!balance) return notFound("Bottle");
     let r;
@@ -99,6 +110,7 @@ export function removeBottle(
     }
     repos.bottles.update(r.bottle);
     if (r.transfer) repos.transfers.insert(r.transfer);
+    invalidateSnapshotsFrom(deps, [r.transfer?.date]);
     for (const c of r.categories) repos.categories.update(c);
     repos.ruleVersions.insert(r.ruleVersion);
     return ok({ transferred: r.transfer !== null });

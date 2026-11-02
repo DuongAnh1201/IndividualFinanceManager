@@ -55,6 +55,11 @@ export interface PostDueInput {
   postedKeys: ReadonlySet<string>;
   /** Used to default the expense's bottle from its category. */
   categories: readonly Pick<Category, "id" | "defaultBottleId">[];
+  /**
+   * When given, a category default pointing at a missing or archived bottle yields a null
+   * bottle (D-018) instead of an archived one.
+   */
+  bottles?: readonly { id: Id; archivedAt: IsoTimestamp | null }[];
   today: IsoDate;
   /** Timestamp for createdAt/updatedAt (injected; domain never reads the clock). */
   now: IsoTimestamp;
@@ -69,8 +74,14 @@ export interface PostDueInput {
  * time (BR-8).
  */
 export function postDueSubscriptionExpenses(input: PostDueInput): Expense[] {
-  const { subscriptions, postedKeys, categories, today, now, newId } = input;
-  const bottleByCategory = new Map(categories.map((c) => [c.id, c.defaultBottleId]));
+  const { subscriptions, postedKeys, categories, bottles, today, now, newId } = input;
+  const usable = bottles ? new Set(bottles.filter((b) => b.archivedAt === null).map((b) => b.id)) : null;
+  const bottleByCategory = new Map(
+    categories.map((c) => [
+      c.id,
+      c.defaultBottleId !== null && usable && !usable.has(c.defaultBottleId) ? null : c.defaultBottleId,
+    ]),
+  );
   const seen = new Set(postedKeys);
   const out: Expense[] = [];
   for (const sub of subscriptions) {

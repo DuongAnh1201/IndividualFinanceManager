@@ -134,5 +134,18 @@ describe("services over SQLite (seeded)", () => {
     expect(snapshotClosedMonths(d)).toEqual(["2026-11"]);
     expect(d.repos.monthlyReports.get("2026-11")?.totalSpendMinor).toBe(2500);
     expect(snapshotClosedMonths(d)).toEqual([]);
+    // A later write dated in the closed month drops the stored snapshot (real DELETE).
+    unwrap(
+      addExpense(d, {
+        date: "2026-11-20",
+        amountMinor: 100,
+        currency: "USD",
+        categoryId: food.id,
+        paymentMethodId: pm.id,
+      }),
+    );
+    expect(d.repos.monthlyReports.months()).toEqual([]);
+    expect(snapshotClosedMonths(d)).toEqual(["2026-11"]);
+    expect(d.repos.monthlyReports.get("2026-11")?.totalSpendMinor).toBe(2600);
   });
 });

@@ -79,6 +79,8 @@ export interface Repositories {
   monthlyReports: {
     /** Months that already have a snapshot. */
     months(): IsoMonth[];
+    /** Remove a snapshot (stale after a write touching a closed month). */
+    delete(month: IsoMonth): void;
     get(month: IsoMonth): MonthlyReport | undefined;
     upsert(month: IsoMonth, report: MonthlyReport, generatedAt: string): void;
   };

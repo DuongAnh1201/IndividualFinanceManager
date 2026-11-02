@@ -21,6 +21,8 @@ import {
   updateIncome,
   updateSubscription,
 } from "./index";
+import { fail } from "./result";
+import { atomic } from "./support";
 import { makeDeps } from "./testing/fakes";
 
 const expenseInput = {
@@ -308,5 +310,153 @@ describe("reports", () => {
 
   it("snapshot with no data writes nothing", () => {
     expect(snapshotClosedMonths(makeDeps())).toEqual([]);
+  });
+});
+
+describe("failed results never commit", () => {
+  it("atomic rolls back writes made before a failed Result", () => {
+    const d = makeDeps();
+    const r = atomic(d, () => {
+      d.repos.expenses.insert({ ...unwrap(addExpense(makeDeps(), expenseInput)), id: "x" });
+      d.repos.reminders.upsert({ slot: "2026-11-10", status: "done", resolvedAt: "t" });
+      return fail([{ code: "late", field: "f", message: "detected late" }]);
+    });
+    expect(r.ok).toBe(false);
+    expect(!r.ok && r.errors[0]?.code).toBe("late");
+    expect(d.store.expenses).toHaveLength(0);
+    expect(d.store.reminders).toHaveLength(0);
+  });
+
+  it("failing use-cases leave the store untouched", () => {
+    const d = makeDeps();
+    unwrap(addIncome(d, incomeInput));
+    const before = JSON.stringify({ ...d.store, reports: [...d.store.reports] });
+    const attempts = [
+      addExpense(d, { ...expenseInput, amountMinor: -1 }),
+      addIncome(d, { ...incomeInput, source: "" }),
+      updateIncome(d, d.store.incomes[0]!.id, { ...incomeInput, amountMinor: 0 }),
+      editBottleRules(d, [{ bottleId: "N", ratio: 0 }]),
+      removeBottle(d, "P"),
+      deleteExpense(d, "nope"),
+      createSubscription(d, { ...subInput, billingDay: 99 }),
+    ];
+    expect(attempts.every((r) => !r.ok)).toBe(true);
+    expect(JSON.stringify({ ...d.store, reports: [...d.store.reports] })).toBe(before);
+  });
+});
+
+describe("snapshot invalidation", () => {
+  const setup = () => {
+    const d = makeDeps({ today: "2027-01-05" });
+    unwrap(addExpense(d, { ...expenseInput, date: "2026-11-05" }));
+    unwrap(addExpense(d, { ...expenseInput, date: "2026-12-05" }));
+    expect(snapshotClosedMonths(d)).toEqual(["2026-11", "2026-12"]);
+    return d;
+  };
+
+  it("a write dated in a closed month drops that month's and later closed snapshots; rebuilt on next open", () => {
+    const d = setup();
+    unwrap(addExpense(d, { ...expenseInput, date: "2026-11-20", amountMinor: 1000 }));
+    expect([...d.store.reports.keys()]).toEqual([]);
+    expect(snapshotClosedMonths(d)).toEqual(["2026-11", "2026-12"]);
+    expect(d.store.reports.get("2026-11")?.report.totalSpendMinor).toBe(3500);
+  });
+
+  it("only later closed months are dropped when an earlier one is untouched", () => {
+    const d = setup();
+    unwrap(addExpense(d, { ...expenseInput, date: "2026-12-20" }));
+    expect([...d.store.reports.keys()]).toEqual(["2026-11"]);
+  });
+
+  it("covers edit, delete, income add/update/delete and resplit", () => {
+    const cases: [(d: ReturnType<typeof setup>) => unknown, number][] = [
+      [
+        (d) =>
+          editExpense(d, d.store.expenses[0]!.id, { ...expenseInput, date: "2026-11-05", amountMinor: 99 }),
+        0,
+      ],
+      [(d) => deleteExpense(d, d.store.expenses[0]!.id), 0],
+      [(d) => addIncome(d, { ...incomeInput, date: "2026-12-10" }), 1],
+    ];
+    for (const [act, remaining] of cases) {
+      const d = setup();
+      act(d);
+      expect(d.store.reports.size).toBe(remaining);
+    }
+    const d = setup();
+    const inc = unwrap(addIncome(d, { ...incomeInput, date: "2026-12-10" }));
+    snapshotClosedMonths(d);
+    unwrap(updateIncome(d, inc.id, { ...incomeInput, date: "2026-12-10", amountMinor: 5000 }));
+    expect([...d.store.reports.keys()]).toEqual(["2026-11"]);
+    snapshotClosedMonths(d);
+    unwrap(resplitIncome(d, inc.id));
+    expect([...d.store.reports.keys()]).toEqual(["2026-11"]);
+    snapshotClosedMonths(d);
+    unwrap(deleteIncome(d, inc.id));
+    expect([...d.store.reports.keys()]).toEqual(["2026-11"]);
+  });
+
+  it("autopost catch-up into a closed month invalidates it; current-month writes do not", () => {
+    const d = setup();
+    unwrap(createSubscription(d, { ...subInput, startDate: "2026-12-01" }));
+    runSubscriptionAutopost(d);
+    expect([...d.store.reports.keys()]).toEqual(["2026-11"]);
+    snapshotClosedMonths(d);
+    unwrap(addExpense(d, { ...expenseInput, date: "2027-01-03" }));
+    expect(d.store.reports.size).toBe(2);
+  });
+});
+
+describe("removeBottle with missing rates", () => {
+  it("refuses, lists the rows, and writes nothing", () => {
+    const d = makeDeps();
+    d.store.incomes.push({
+      id: "vnd",
+      date: "2026-11-01",
+      amountMinor: 1_000_000,
+      currency: "VND",
+      fxRateToBase: null,
+      source: "Gift",
+      note: null,
+      payDaySlot: null,
+      bottleRuleVersionId: "v1",
+    });
+    d.store.allocations.push({ id: "a1", incomeId: "vnd", bottleId: "P", amountMinor: 100_000 });
+    const before = JSON.stringify(d.store.bottles) + JSON.stringify(d.store.transfers);
+    const r = removeBottle(d, "P", "N");
+    expect(!r.ok && r.errors[0]?.code).toBe("missing-rate");
+    expect(!r.ok && r.errors[0]?.message).toContain("vnd");
+    expect(JSON.stringify(d.store.bottles) + JSON.stringify(d.store.transfers)).toBe(before);
+    expect(d.store.ruleVersions).toHaveLength(1);
+  });
+});
+
+describe("pay-day slots", () => {
+  it("updateIncome moving payDaySlot reopens the old slot and resolves the new one", () => {
+    const d = makeDeps({ today: "2026-11-26" });
+    const inc = unwrap(addIncome(d, { ...incomeInput, payDaySlot: "2026-11-10" }));
+    expect(getPendingReminders(d, "2026-11-01")).toEqual(["2026-11-25"]);
+    unwrap(updateIncome(d, inc.id, { ...incomeInput, date: "2026-11-25", payDaySlot: "2026-11-25" }));
+    expect(getPendingReminders(d, "2026-11-01")).toEqual(["2026-11-10"]);
+  });
+
+  it("dismissReminder only accepts real, due pay days", () => {
+    const d = makeDeps({ today: "2026-11-12" });
+    const code = (r: ReturnType<typeof dismissReminder>) => (!r.ok ? r.errors[0]?.code : "ok");
+    expect(code(dismissReminder(d, "nope"))).toBe("invalid-slot");
+    expect(code(dismissReminder(d, "2026-11-11"))).toBe("not-a-pay-day");
+    expect(code(dismissReminder(d, "2026-11-25"))).toBe("not-due");
+    expect(code(dismissReminder(d, "2026-11-10"))).toBe("ok");
+    expect(d.store.reminders).toEqual([expect.objectContaining({ slot: "2026-11-10", status: "dismissed" })]);
+  });
+});
+
+describe("autopost and archived default bottle (D-018)", () => {
+  it("posts with a null bottle when the category's default bottle is archived", () => {
+    const d = makeDeps();
+    d.store.bottles.find((b) => b.id === "N")!.archivedAt = "2026-01-01T00:00:00Z";
+    unwrap(createSubscription(d, subInput));
+    const posted = runSubscriptionAutopost(d, "2026-10-20");
+    expect(posted.every((e) => e.bottleId === null)).toBe(true);
   });
 });

@@ -9,6 +9,7 @@ import {
 import type { Expense, Id, IsoDate, Subscription } from "../domain/types";
 import { fail, notFound, ok, type FieldError, type Result } from "./result";
 import type { ServiceDeps } from "./ports";
+import { atomic, invalidateSnapshotsFrom } from "./support";
 
 /** BR-1: post every owed subscription charge up to `today` (default: clock). Idempotent. */
 export function runSubscriptionAutopost(deps: ServiceDeps, today?: IsoDate): Expense[] {
@@ -18,11 +19,17 @@ export function runSubscriptionAutopost(deps: ServiceDeps, today?: IsoDate): Exp
       subscriptions: repos.subscriptions.list(),
       postedKeys: repos.expenses.postedChargeKeys(),
       categories: repos.categories.list(),
+      bottles: repos.bottles.list(),
       today: today ?? clock.today(),
       now: clock.now(),
       newId: clock.newId,
     });
-    return posted.length > 0 ? repos.expenses.insertMany(posted) : [];
+    const inserted = posted.length > 0 ? repos.expenses.insertMany(posted) : [];
+    invalidateSnapshotsFrom(
+      deps,
+      inserted.map((e) => e.date),
+    ); // catch-up can land in closed months
+    return inserted;
   });
 }
 
@@ -35,7 +42,7 @@ export function createSubscription(
   input: SubscriptionInput,
 ): Result<Subscription, FieldError> {
   const { repos, clock } = deps;
-  return repos.transaction(() => {
+  return atomic(deps, () => {
     const v = validateSubscription(input, subscriptionContext(deps));
     if (!v.ok) return fail(v.errors);
     const now = clock.now();
@@ -61,7 +68,7 @@ export function updateSubscription(
   input: SubscriptionInput,
 ): Result<Subscription, FieldError> {
   const { repos, clock } = deps;
-  return repos.transaction(() => {
+  return atomic(deps, () => {
     const existing = repos.subscriptions.get(id);
     if (!existing) return notFound("Subscription");
     const v = validateSubscription(input, subscriptionContext(deps));
@@ -78,7 +85,7 @@ export function endSubscription(
   endDate?: IsoDate,
 ): Result<Subscription, FieldError> {
   const { repos, clock } = deps;
-  return repos.transaction(() => {
+  return atomic(deps, () => {
     const existing = repos.subscriptions.get(id);
     if (!existing) return notFound("Subscription");
     const sub = endSub(existing, endDate ?? clock.today(), clock.now());
@@ -93,7 +100,7 @@ export function changeSubscriptionPrice(
   amountMinor: number,
 ): Result<Subscription, FieldError> {
   const { repos, clock } = deps;
-  return repos.transaction(() => {
+  return atomic(deps, () => {
     const existing = repos.subscriptions.get(id);
     if (!existing) return notFound("Subscription");
     if (!Number.isSafeInteger(amountMinor) || amountMinor <= 0) {

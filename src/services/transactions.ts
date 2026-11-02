@@ -5,6 +5,7 @@ import { completeReminder } from "../domain/reminders";
 import type { Expense, Id, Income } from "../domain/types";
 import { fail, notFound, ok, type FieldError, type Result } from "./result";
 import type { ServiceDeps } from "./ports";
+import { atomic, invalidateSnapshotsFrom, reopenSlotIfOrphaned } from "./support";
 
 function expenseContext({ repos }: ServiceDeps) {
   return {
@@ -19,7 +20,7 @@ function expenseContext({ repos }: ServiceDeps) {
 /** Validate (BR-2) and save a manual expense. */
 export function addExpense(deps: ServiceDeps, input: ExpenseInput): Result<Expense, FieldError> {
   const { repos, clock } = deps;
-  return repos.transaction(() => {
+  return atomic(deps, () => {
     const v = validateExpense(input, expenseContext(deps));
     if (!v.ok) return fail(v.errors);
     const now = clock.now();
@@ -31,6 +32,7 @@ export function addExpense(deps: ServiceDeps, input: ExpenseInput): Result<Expen
       updatedAt: now,
     };
     repos.expenses.insert(expense);
+    invalidateSnapshotsFrom(deps, [expense.date]);
     return ok(expense);
   });
 }
@@ -38,7 +40,7 @@ export function addExpense(deps: ServiceDeps, input: ExpenseInput): Result<Expen
 /** Edit an expense; keeps its source / subscriptionId / billingMonth / createdAt. */
 export function editExpense(deps: ServiceDeps, id: Id, input: ExpenseInput): Result<Expense, FieldError> {
   const { repos, clock } = deps;
-  return repos.transaction(() => {
+  return atomic(deps, () => {
     const existing = repos.expenses.get(id);
     if (!existing) return notFound("Expense");
     const v = validateExpense(input, expenseContext(deps));
@@ -70,6 +72,7 @@ export function editExpense(deps: ServiceDeps, id: Id, input: ExpenseInput): Res
       updatedAt: clock.now(),
     };
     repos.expenses.update(expense);
+    invalidateSnapshotsFrom(deps, [existing.date, expense.date]);
     return ok(expense);
   });
 }
@@ -84,7 +87,7 @@ function incomeContext({ repos }: ServiceDeps) {
  */
 export function addIncome(deps: ServiceDeps, input: IncomeInput): Result<Income, FieldError> {
   const { repos, clock } = deps;
-  return repos.transaction(() => {
+  return atomic(deps, () => {
     const v = validateIncome(input, incomeContext(deps));
     if (!v.ok) return fail(v.errors);
     const now = clock.now();
@@ -95,6 +98,7 @@ export function addIncome(deps: ServiceDeps, input: IncomeInput): Result<Income,
     repos.incomes.insert(income);
     repos.allocations.insertMany(allocateIncome(income, rule, clock.newId));
     if (income.payDaySlot) repos.reminders.upsert(completeReminder(income.payDaySlot, now));
+    invalidateSnapshotsFrom(deps, [income.date]);
     return ok(income);
   });
 }
@@ -105,7 +109,7 @@ export function addIncome(deps: ServiceDeps, input: IncomeInput): Result<Income,
  */
 export function updateIncome(deps: ServiceDeps, id: Id, input: IncomeInput): Result<Income, FieldError> {
   const { repos, clock } = deps;
-  return repos.transaction(() => {
+  return atomic(deps, () => {
     const existing = repos.incomes.get(id);
     if (!existing) return notFound("Income");
     const v = validateIncome(input, incomeContext(deps));
@@ -118,7 +122,12 @@ export function updateIncome(deps: ServiceDeps, id: Id, input: IncomeInput): Res
     const income: Income = { ...existing, ...v.value };
     repos.incomes.update(income);
     repos.allocations.replaceForIncome(income.id, allocateIncome(income, rule, clock.newId));
+    // Moving the pay-day link reopens the old slot (unless another income resolves it) and resolves the new one.
+    if (existing.payDaySlot && existing.payDaySlot !== income.payDaySlot) {
+      reopenSlotIfOrphaned(repos, existing.payDaySlot);
+    }
     if (income.payDaySlot) repos.reminders.upsert(completeReminder(income.payDaySlot, clock.now()));
+    invalidateSnapshotsFrom(deps, [existing.date, income.date]);
     return ok(income);
   });
 }
@@ -129,7 +138,7 @@ export function updateIncome(deps: ServiceDeps, id: Id, input: IncomeInput): Res
  */
 export function deleteExpense(deps: ServiceDeps, id: Id): Result<{ id: Id }, FieldError> {
   const { repos } = deps;
-  return repos.transaction(() => {
+  return atomic(deps, () => {
     const existing = repos.expenses.get(id);
     if (!existing) return notFound("Expense");
     if (existing.source === "subscription") {
@@ -142,6 +151,7 @@ export function deleteExpense(deps: ServiceDeps, id: Id): Result<{ id: Id }, Fie
       ]);
     }
     repos.expenses.delete(id);
+    invalidateSnapshotsFrom(deps, [existing.date]);
     return ok({ id });
   });
 }
@@ -153,16 +163,13 @@ export function deleteExpense(deps: ServiceDeps, id: Id): Result<{ id: Id }, Fie
  */
 export function deleteIncome(deps: ServiceDeps, id: Id): Result<{ id: Id }, FieldError> {
   const { repos } = deps;
-  return repos.transaction(() => {
+  return atomic(deps, () => {
     const existing = repos.incomes.get(id);
     if (!existing) return notFound("Income");
     repos.allocations.deleteForIncome(id);
     repos.incomes.delete(id);
-    const slot = existing.payDaySlot;
-    if (slot && !repos.incomes.list().some((i) => i.payDaySlot === slot)) {
-      const row = repos.reminders.list().find((r) => r.slot === slot);
-      if (row?.status === "done") repos.reminders.delete(slot);
-    }
+    reopenSlotIfOrphaned(repos, existing.payDaySlot);
+    invalidateSnapshotsFrom(deps, [existing.date]);
     return ok({ id });
   });
 }

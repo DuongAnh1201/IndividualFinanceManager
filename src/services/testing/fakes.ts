@@ -179,6 +179,7 @@ export function fakeRepos(store: Store): Repositories {
     },
     monthlyReports: {
       months: () => [...s.reports.keys()].sort(),
+      delete: (month) => void s.reports.delete(month),
       get: (month) => s.reports.get(month)?.report,
       upsert: (month, report, generatedAt) => void s.reports.set(month, { report, generatedAt }),
     },

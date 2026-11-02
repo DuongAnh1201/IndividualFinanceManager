@@ -262,3 +262,25 @@ describe("validateSubscription", () => {
     expect(codes(validateSubscription({ ...good, billingDay: 1.5 }, ctx))).toEqual(["invalid-billing-day"]);
   });
 });
+
+describe("autopost with archived default bottle (D-018)", () => {
+  it("uses a null bottle when the category's default bottle is archived or missing", () => {
+    const base = {
+      subscriptions: [sub({ startDate: "2026-03-01" })],
+      postedKeys: new Set<string>(),
+      categories: cats,
+      today: "2026-03-20",
+      now: NOW,
+      newId: () => "e",
+    };
+    const archived = postDueSubscriptionExpenses({
+      ...base,
+      bottles: [{ id: "necessities", archivedAt: "x" }],
+    });
+    expect(archived[0]?.bottleId).toBeNull();
+    const missing = postDueSubscriptionExpenses({ ...base, bottles: [] });
+    expect(missing[0]?.bottleId).toBeNull();
+    const live = postDueSubscriptionExpenses({ ...base, bottles: [{ id: "necessities", archivedAt: null }] });
+    expect(live[0]?.bottleId).toBe("necessities");
+  });
+});
