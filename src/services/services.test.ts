@@ -275,7 +275,7 @@ describe("reminders & dashboard", () => {
     d.store.settings.firstUsedOn = "2026-11-01";
     d.store.livingLimits.push({ month: "2026-11", limitMinor: 10_000 });
     unwrap(addIncome(d, { ...incomeInput, payDaySlot: "2026-11-10" }));
-    unwrap(addExpense(d, { ...expenseInput, amountMinor: 8_500 })).expense;
+    unwrap(addExpense(d, { ...expenseInput, amountMinor: 8_500 }));
     unwrap(createSubscription(d, { ...subInput, startDate: "2026-11-01" }));
     const dash = getDashboard(d);
     expect(dash.month).toBe("2026-11");
@@ -290,7 +290,7 @@ describe("reminders & dashboard", () => {
 describe("reports", () => {
   it("snapshots ended months once, and serves snapshots for closed months", () => {
     const d = makeDeps({ today: "2026-12-02" });
-    unwrap(addExpense(d, expenseInput)).expense;
+    unwrap(addExpense(d, expenseInput));
     expect(snapshotClosedMonths(d)).toEqual(["2026-11"]);
     expect(snapshotClosedMonths(d)).toEqual([]);
     d.store.reports.get("2026-11")!.report.totalSpendMinor = 123;
@@ -352,15 +352,15 @@ describe("failed results never commit", () => {
 describe("snapshot invalidation", () => {
   const setup = () => {
     const d = makeDeps({ today: "2027-01-05" });
-    unwrap(addExpense(d, { ...expenseInput, date: "2026-11-05" })).expense;
-    unwrap(addExpense(d, { ...expenseInput, date: "2026-12-05" })).expense;
+    unwrap(addExpense(d, { ...expenseInput, date: "2026-11-05" }));
+    unwrap(addExpense(d, { ...expenseInput, date: "2026-12-05" }));
     expect(snapshotClosedMonths(d)).toEqual(["2026-11", "2026-12"]);
     return d;
   };
 
   it("a write dated in a closed month drops that month's and later closed snapshots; rebuilt on next open", () => {
     const d = setup();
-    unwrap(addExpense(d, { ...expenseInput, date: "2026-11-20", amountMinor: 1000 })).expense;
+    unwrap(addExpense(d, { ...expenseInput, date: "2026-11-20", amountMinor: 1000 }));
     expect([...d.store.reports.keys()]).toEqual([]);
     expect(snapshotClosedMonths(d)).toEqual(["2026-11", "2026-12"]);
     expect(d.store.reports.get("2026-11")?.report.totalSpendMinor).toBe(3500);
@@ -368,7 +368,7 @@ describe("snapshot invalidation", () => {
 
   it("only later closed months are dropped when an earlier one is untouched", () => {
     const d = setup();
-    unwrap(addExpense(d, { ...expenseInput, date: "2026-12-20" })).expense;
+    unwrap(addExpense(d, { ...expenseInput, date: "2026-12-20" }));
     expect([...d.store.reports.keys()]).toEqual(["2026-11"]);
   });
 
@@ -406,7 +406,7 @@ describe("snapshot invalidation", () => {
     runSubscriptionAutopost(d);
     expect([...d.store.reports.keys()]).toEqual(["2026-11"]);
     snapshotClosedMonths(d);
-    unwrap(addExpense(d, { ...expenseInput, date: "2027-01-03" })).expense;
+    unwrap(addExpense(d, { ...expenseInput, date: "2027-01-03" }));
     expect(d.store.reports.size).toBe(2);
   });
 });
